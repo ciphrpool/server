@@ -2,16 +2,17 @@ package server
 
 import (
 	"backend/internal/database"
+
 	"github.com/gofiber/fiber/v2"
 )
 
-type FiberServer struct {
+type MaintenanceServer struct {
 	*fiber.App
 	db database.Service
 }
 
-func New() *FiberServer {
-	server := &FiberServer{
+func New() *MaintenanceServer {
+	server := &MaintenanceServer{
 		App: fiber.New(),
 		db:  database.New(),
 	}

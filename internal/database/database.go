@@ -13,7 +13,7 @@ import (
 )
 
 type Service interface {
-	Health() map[string]string
+	Health() bool
 }
 
 type service struct {
@@ -38,7 +38,7 @@ func New() Service {
 	return s
 }
 
-func (s *service) Health() map[string]string {
+func (s *service) Health() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -47,7 +47,5 @@ func (s *service) Health() map[string]string {
 		log.Fatalf(fmt.Sprintf("db down: %v", err))
 	}
 
-	return map[string]string{
-		"message": "It's healthy",
-	}
+	return true
 }

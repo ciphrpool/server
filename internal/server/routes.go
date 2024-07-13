@@ -1,21 +1,27 @@
 package server
 
 import (
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
 )
 
-func (s *FiberServer) RegisterFiberRoutes() {
-	s.App.Get("/", s.HelloWorldHandler)
-	s.App.Get("/health", s.healthHandler)
+func (server *MaintenanceServer) RegisterRoutes() {
+	server.App.Get("/", server.HelloWorldHandler)
+	server.App.Get("/health", server.healthHandler)
+
 }
 
-func (s *FiberServer) HelloWorldHandler(c *fiber.Ctx) error {
+func (server *MaintenanceServer) HelloWorldHandler(c *fiber.Ctx) error {
 	resp := map[string]string{
 		"message": "Hello World",
 	}
 	return c.JSON(resp)
 }
 
-func (s *FiberServer) healthHandler(c *fiber.Ctx) error {
-	return c.JSON(s.db.Health())
+func (server *MaintenanceServer) healthHandler(c *fiber.Ctx) error {
+	resp := map[string]string{
+		"db": strconv.FormatBool(server.db.Health()),
+	}
+	return c.JSON(resp)
 }
