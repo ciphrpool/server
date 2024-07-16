@@ -10,6 +10,8 @@ func (server *MaintenanceServer) RegisterRoutes() {
 	server.App.Get("/", server.HelloWorldHandler)
 	server.App.Get("/health", server.healthHandler)
 
+	server.RegisterSecurityRoutes()
+
 }
 
 func (server *MaintenanceServer) HelloWorldHandler(c *fiber.Ctx) error {
@@ -21,7 +23,8 @@ func (server *MaintenanceServer) HelloWorldHandler(c *fiber.Ctx) error {
 
 func (server *MaintenanceServer) healthHandler(c *fiber.Ctx) error {
 	resp := map[string]string{
-		"db": strconv.FormatBool(server.db.Health()),
+		"db":    strconv.FormatBool(server.Db.Health()),
+		"vault": strconv.FormatBool(server.VaultManager.Health()),
 	}
 	return c.JSON(resp)
 }

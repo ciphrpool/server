@@ -16,7 +16,7 @@ type Service interface {
 	Health() bool
 }
 
-type service struct {
+type Database struct {
 	db *sql.DB
 }
 
@@ -28,24 +28,19 @@ var (
 	host     = os.Getenv("DB_HOST")
 )
 
-func New() Service {
+func New() Database {
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := &service{db: db}
+	s := Database{db: db}
 	return s
 }
 
-func (s *service) Health() bool {
+func (s *Database) Health() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-
 	err := s.db.PingContext(ctx)
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("db down: %v", err))
-	}
-
-	return true
+	return err == nil
 }

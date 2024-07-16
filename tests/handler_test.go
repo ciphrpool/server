@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"backend/internal/server"
+	"backend/lib/server"
 	"io"
 	"net/http"
 	"testing"

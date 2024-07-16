@@ -1,7 +1,7 @@
 package main
 
 import (
-	"backend/internal/server"
+	"backend/lib/server"
 	"fmt"
 	"os"
 	"strconv"
@@ -11,12 +11,16 @@ import (
 
 func main() {
 
-	server := server.New()
-
-	server.RegisterRoutes()
-	port, _ := strconv.Atoi(os.Getenv("PORT"))
-	err := server.Listen(fmt.Sprintf(":%d", port))
+	server, err := server.New()
 	if err != nil {
 		panic(fmt.Sprintf("cannot start server: %s", err))
 	}
+
+	server.RegisterRoutes()
+	port, _ := strconv.Atoi(os.Getenv("PORT"))
+	err = server.Listen(fmt.Sprintf(":%d", port))
+	if err != nil {
+		panic(fmt.Sprintf("cannot start server: %s", err))
+	}
+	server.Start()
 }
