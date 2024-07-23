@@ -3,6 +3,7 @@ package security
 import (
 	"backend/lib"
 	"backend/lib/database"
+	m "backend/lib/maintenance"
 	v "backend/lib/vault"
 
 	"github.com/google/uuid"
@@ -34,6 +35,7 @@ func InitEngineSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_compl
 		})
 	}
 	on_complete(true)
+	m.Info("Successfully load vault engines token")
 
 	return ctx.JSON(fiber.Map{
 		"message": "vault engines token set successfully",
@@ -84,6 +86,7 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manage
 			"error": err.Error(),
 		})
 	}
+	m.Info("Engine successfully created", "engine", engine)
 	return ctx.JSON(engine)
 }
 
@@ -129,6 +132,7 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 
 	engine.Alive = true
 	cache.UpdateEngine(engine)
+	m.Info("Engine successfully connected", "engine", engine)
 
 	return ctx.JSON(fiber.Map{
 		"status": "accepted",

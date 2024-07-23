@@ -1,7 +1,7 @@
 package maintenance
 
 import (
-	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -34,6 +34,51 @@ type MSS struct {
 	state    State
 	substate SubState
 }
+type MSSTransition struct {
+	From MSS
+	To   MSS
+}
+
+func names(mode Mode, state State, substate SubState) (string, string, string) {
+	var mode_name string
+	switch mode {
+	case MODE_INIT:
+		mode_name = "INIT"
+	case MODE_OPERATIONAL:
+		mode_name = "OPERATIONAL"
+	}
+
+	var state_name string
+	switch state {
+	case STATE_CONFIGURING:
+		state_name = "CONFIGURING"
+	case STATE_FAILED:
+		state_name = "FAILED"
+	case STATE_RUNNING:
+		state_name = "RUNNING"
+	}
+
+	var substate_name string
+	switch substate {
+	case SUBSTATE_CONFIGURING_INIT:
+		substate_name = "CONFIGURING_INIT"
+	case SUBSTATE_CONFIGURING_SECURITY:
+		substate_name = "CONFIGURING_SECURITY"
+	case SUBSTATE_CONFIGURING_SERVICES:
+		substate_name = "CONFIGURING_SERVICES"
+	case SUBSTATE_SAFE:
+		substate_name = "SAFE"
+	case SUBSTATE_UNSAFE:
+		substate_name = "UNSAFE"
+	case SUBSTATE_FAILED:
+		substate_name = "FAILED"
+	}
+	return mode_name, state_name, substate_name
+}
+
+var transitions = map[MSSTransition]struct{}{
+	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_INIT}, MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SERVICES}}: {},
+}
 
 type StateMachine struct {
 	mode     Mode
@@ -64,78 +109,14 @@ func (state_machine *StateMachine) Get() (Mode, State, SubState) {
 func (state_machine *StateMachine) To(mode Mode, state State, substate SubState) error {
 	current_mode, current_state, current_substate := state_machine.Get()
 
-	var new_mode Mode
-	new_mode = current_mode
-
-	var new_state State
-	new_state = current_state
-
-	var new_substate SubState
-	new_substate = current_substate
-
-	switch mode {
-	case MODE_INIT:
-		if current_mode != MODE_INIT {
-			return errors.New("State Machine : cannot change mode to INIT")
-		}
-	case MODE_OPERATIONAL:
-		if current_mode == MODE_INIT && current_state != STATE_CONFIGURING && current_substate != SUBSTATE_CONFIGURING_SECURITY {
-			return errors.New("State Machine : cannot change mode to OPERATIONAL")
-		}
-	default:
-		return errors.New("State Machine : Invalid mode")
+	if _, ok := transitions[MSSTransition{MSS{current_mode, current_state, current_substate}, MSS{mode, state, substate}}]; ok {
+		state_machine.accept(mode, state, substate)
+		return nil
+	} else {
+		mode_name, state_name, substate_name := names(mode, state, substate)
+		Warn("MSS : Invalid mode state substate transition", "mode", mode_name, "state", state_name, "substate", substate_name)
+		return fmt.Errorf("invalid mode state substate transition")
 	}
-	new_mode = mode
-
-	switch state {
-	case STATE_CONFIGURING:
-		if new_mode != MODE_INIT || current_state != STATE_CONFIGURING {
-			return errors.New("State Machine : cannot change state to CONFIGURING")
-		}
-	case STATE_RUNNING:
-		if new_mode == MODE_INIT || (current_state == STATE_CONFIGURING && current_substate != SUBSTATE_CONFIGURING_SECURITY) {
-			return errors.New("State Machine : cannot change state to RUNNING")
-		}
-	case STATE_FAILED:
-		break
-	default:
-		return errors.New("State Machine : Invalid state")
-	}
-	new_state = state
-
-	switch substate {
-	case SUBSTATE_CONFIGURING_INIT:
-		if new_mode != MODE_INIT || new_state != STATE_CONFIGURING {
-			return errors.New("State Machine : cannot change substate to CONFIGURING_SERVICES")
-		}
-	case SUBSTATE_CONFIGURING_SERVICES:
-		if new_mode != MODE_INIT || new_state != STATE_CONFIGURING ||
-			(new_state == STATE_CONFIGURING && current_substate != SUBSTATE_CONFIGURING_INIT) {
-			return errors.New("State Machine : cannot change substate to CONFIGURING_SERVICES")
-		}
-	case SUBSTATE_CONFIGURING_SECURITY:
-		if new_mode != MODE_INIT || new_state != STATE_CONFIGURING ||
-			(new_state == STATE_CONFIGURING && current_substate != SUBSTATE_CONFIGURING_SERVICES) {
-			return errors.New("State Machine : cannot change substate to CONFIGURING_SECURITY")
-		}
-	case SUBSTATE_SAFE:
-		if new_mode != MODE_OPERATIONAL || new_state != STATE_RUNNING {
-			return errors.New("State Machine : cannot change substate to CONFIGURING_SECURITY")
-		}
-	case SUBSTATE_UNSAFE:
-		if new_mode != MODE_OPERATIONAL || new_state != STATE_RUNNING {
-			return errors.New("State Machine : cannot change substate to CONFIGURING_SECURITY")
-		}
-	case SUBSTATE_FAILED:
-		break
-	default:
-		return errors.New("State Machine : Invalid substate")
-	}
-	new_substate = substate
-
-	state_machine.accept(new_mode, new_state, new_substate)
-
-	return nil
 }
 
 func (state_machine *StateMachine) accept(mode Mode, state State, substate SubState) {
@@ -151,6 +132,8 @@ func (state_machine *StateMachine) accept(mode Mode, state State, substate SubSt
 	state_machine.mode = mode
 	state_machine.state = state
 	state_machine.substate = substate
+	mode_name, state_name, substate_name := names(mode, state, substate)
+	Info("MSS : transition done", "mode", mode_name, "state", state_name, "substate", substate_name)
 }
 
 func (state_machine *StateMachine) When(mode Mode, state State, substate SubState, callback func()) {

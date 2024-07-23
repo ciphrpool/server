@@ -3,9 +3,13 @@ package server
 import (
 	"backend/lib/database"
 	"backend/lib/maintenance"
+	"backend/lib/server/middleware"
 	"backend/lib/vault"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
 type MaintenanceServer struct {
@@ -43,7 +47,29 @@ func New() (*MaintenanceServer, error) {
 	return &server, nil
 }
 
+func (server *MaintenanceServer) Configure() {
+	err := maintenance.InitLogger("mcs.log")
+	if err != nil {
+		server.App.Use(middleware.Logger())
+	}
+	server.App.Use(func(c *fiber.Ctx) error {
+		c.Locals("StateMachine", &server.StateMachine)
+		return c.Next()
+	})
+
+	server.App.Use(helmet.New())
+	server.App.Use(recover.New())
+	server.App.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept",
+	}))
+}
+
 func (server *MaintenanceServer) Start() {
+	maintenance.Info("Starting the server")
+
+	server.Configure()
+	server.RegisterRoutes()
 	server.SecurityManager.Start(&server.StateMachine)
 
 	server.StateMachine.When(

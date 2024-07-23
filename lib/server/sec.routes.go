@@ -20,7 +20,7 @@ func (server *MaintenanceServer) RegisterSecurityRoutes() {
 func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Router) {
 	engines_group := routes.Group("/engines")
 
-	engines_group.Get("/init",
+	engines_group.Post("/init",
 		middleware.OnMode(m.MODE_INIT),
 		middleware.OnState(m.STATE_CONFIGURING),
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_SECURITY),
@@ -33,7 +33,7 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 			})
 		})
 
-	engines_group.Get("/new", middleware.OnMode(m.MODE_OPERATIONAL),
+	engines_group.Post("/new", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
 		middleware.WithKey("ENGINES_ADM_KEY", func() (string, error) {
@@ -43,12 +43,23 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 			return security.RequestEngineConnexionHandler(c, &server.Cache, &server.VaultManager)
 		},
 	)
+
+	engines_group.Post("/connect", middleware.OnMode(m.MODE_OPERATIONAL),
+		middleware.OnState(m.STATE_RUNNING),
+		middleware.OnSubstate(m.SUBSTATE_SAFE),
+		middleware.WithKey("ENGINES_ADM_KEY", func() (string, error) {
+			return server.VaultManager.GetApiKey("ENGINES_ADM_KEY")
+		}),
+		func(c *fiber.Ctx) error {
+			return security.ConnectHandler(c, &server.Cache, &server.VaultManager)
+		},
+	)
 }
 
 func (server *MaintenanceServer) registerSecurityApiRoutes(routes fiber.Router) {
 	api_group := routes.Group("/api")
 
-	api_group.Get("/init",
+	api_group.Post("/init",
 		middleware.OnMode(m.MODE_INIT),
 		middleware.OnState(m.STATE_CONFIGURING),
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_INIT),
@@ -63,7 +74,7 @@ func (server *MaintenanceServer) registerSecurityApiRoutes(routes fiber.Router) 
 func (server *MaintenanceServer) registerSecurityServicesRoutes(routes fiber.Router) {
 	services_group := routes.Group("/services")
 
-	services_group.Get("/init",
+	services_group.Post("/init",
 		middleware.OnMode(m.MODE_INIT),
 		middleware.OnState(m.STATE_CONFIGURING),
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_INIT),

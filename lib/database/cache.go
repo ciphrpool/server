@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	m "backend/lib/maintenance"
+
 	"github.com/google/uuid"
 	surrealdb "github.com/surrealdb/surrealdb.go"
 )
@@ -39,6 +41,7 @@ func (cache *Cache) Connect(password string) error {
 	if _, err := cache.Db.Use(namespace, database); err != nil {
 		return fmt.Errorf("failed to select namespace and database: %w", err)
 	}
+	m.Info("Cache connection succeeded")
 	return nil
 }
 

@@ -22,7 +22,7 @@ func WithKey(key string, real_key func() (string, error)) fiber.Handler {
 		correct_key, err := real_key()
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid API key",
+				"error": "cannont check API key",
 			})
 		}
 		if apiKey != correct_key {

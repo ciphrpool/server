@@ -19,43 +19,55 @@ func genAESKey() (string, error) {
 }
 
 func DecryptAES(src string, key string) (string, error) {
+	// Decode the base64 string
+	encrypted, err := base64.StdEncoding.DecodeString(src)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the nonce and ciphertext
+	nonce, ciphertext := encrypted[:12], encrypted[12:]
+
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return "", err
 	}
 
-	cipherText := make([]byte, aes.BlockSize+len(src))
-	iv := cipherText[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
+	aes_gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %v", err)
 	}
 
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(cipherText[aes.BlockSize:], []byte(src))
+	// Decrypt the message
+	plaintext, err := aes_gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt: %v", err)
+	}
 
-	return base64.StdEncoding.EncodeToString(cipherText), nil
+	return string(plaintext), nil
 }
 
-func EncryptAES(src string, key string) (string, error) {
-	cipherTextBytes, err := base64.StdEncoding.DecodeString(src)
+func EncryptAES(src string, key_b64 string) (string, error) {
+	key, err := base64.StdEncoding.DecodeString(key_b64)
 	if err != nil {
 		return "", err
 	}
-
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return "", err
 	}
 
-	if len(cipherTextBytes) < aes.BlockSize {
-		return "", fmt.Errorf("ciphertext too short")
+	aes_gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %w", err)
 	}
 
-	iv := cipherTextBytes[:aes.BlockSize]
-	cipherTextBytes = cipherTextBytes[aes.BlockSize:]
-
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(cipherTextBytes, cipherTextBytes)
-
-	return string(cipherTextBytes), nil
+	nonce := make([]byte, 12)
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	ciphertext := aes_gcm.Seal(nil, nonce, []byte(src), nil)
+	combined := append(nonce, ciphertext...)
+	ciphertext_b64 := base64.StdEncoding.EncodeToString(combined)
+	return ciphertext_b64, nil
 }

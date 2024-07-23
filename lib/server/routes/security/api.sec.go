@@ -1,6 +1,7 @@
 package security
 
 import (
+	m "backend/lib/maintenance"
 	v "backend/lib/vault"
 	"os"
 
@@ -26,6 +27,7 @@ func InitApiSecurityHandler(ctx *fiber.Ctx, vault *v.Vault, on_complete func(boo
 
 	vault.SetToken(data.VaultApiToken)
 	on_complete(true)
+	m.Info("Successfully load vault api token")
 
 	os.Unsetenv("API_INIT_KEY")
 	return ctx.JSON(fiber.Map{
