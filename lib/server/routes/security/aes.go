@@ -18,9 +18,14 @@ func genAESKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
-func DecryptAES(src string, key string) (string, error) {
+func DecryptAES(src string, key_b64 string) (string, error) {
 	// Decode the base64 string
 	encrypted, err := base64.StdEncoding.DecodeString(src)
+	if err != nil {
+		return "", err
+	}
+
+	key, err := base64.StdEncoding.DecodeString(key_b64)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +33,7 @@ func DecryptAES(src string, key string) (string, error) {
 	// Extract the nonce and ciphertext
 	nonce, ciphertext := encrypted[:12], encrypted[12:]
 
-	block, err := aes.NewCipher([]byte(key))
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
 	}

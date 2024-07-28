@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -43,17 +44,6 @@ func NewVaultManager() (VaultManager, error) {
 	return vault_manager, nil
 }
 
-func (manager *VaultManager) EnablePasswordEngine() error {
-	mount := "password"
-	err := manager.Engines.Sys().Mount(mount, &v.MountInput{
-		Type: "password",
-	})
-	if err != nil {
-		return fmt.Errorf("failed to enable password secrets engine: %w", err)
-	}
-	return nil
-}
-
 func (manager *VaultManager) Health() bool {
 	engine_health, err := manager.Engines.Sys().Health()
 	if err != nil {
@@ -76,22 +66,16 @@ func (manager *VaultManager) Health() bool {
 
 func (manager *VaultManager) StoreEngineAESKey(id string, key string) error {
 	secret := map[string]interface{}{
-		"id":  id,
 		"key": key,
 	}
-	_, err := manager.Engines.Logical().Write(fmt.Sprintf("engines/aes/%s", id), secret)
+	kvv2 := manager.Engines.KVv2("engines")
+
+	// Write the secret
+	_, err := kvv2.Put(context.Background(), fmt.Sprintf("aes/%s", id), secret)
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
 	}
-	return err
-}
 
-func (manager *VaultManager) StoreEngineCachePwd(id string, key string) error {
-	secret := map[string]interface{}{
-		"id":  id,
-		"pwd": key,
-	}
-	_, err := manager.Engines.Logical().Write(fmt.Sprintf("engines/cache/%s", id), secret)
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
 	}
@@ -99,19 +83,19 @@ func (manager *VaultManager) StoreEngineCachePwd(id string, key string) error {
 }
 
 func (manager *VaultManager) GetEngineAESKey(id string) (string, error) {
-	path := fmt.Sprintf("engines/aes/%s", id)
-	secret, err := manager.Engines.Logical().Read(path)
+	kvv2 := manager.Engines.KVv2("engines")
+	path := fmt.Sprintf("aes/%s", id)
+
+	secret, err := kvv2.Get(context.Background(), path)
 	if err != nil {
-		return "", fmt.Errorf("failed to read secret from Vault: %w", err)
+		return "", fmt.Errorf("failed to retrieve key from Vault: %w", err)
 	}
+
 	if secret == nil || secret.Data == nil {
 		return "", fmt.Errorf("no secret found at path: %s", path)
 	}
-	data, ok := secret.Data["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("invalid secret data format at path: %s", path)
-	}
-	key, ok := data["key"].(string)
+
+	key, ok := secret.Data["key"].(string)
 	if !ok {
 		return "", fmt.Errorf("key not found or invalid in secret data at path: %s", path)
 	}
@@ -119,7 +103,7 @@ func (manager *VaultManager) GetEngineAESKey(id string) (string, error) {
 }
 
 func (manager *VaultManager) GetCachePwd() (string, error) {
-	secret, err := manager.Engines.Logical().Read("services/data/cache")
+	secret, err := manager.Services.Logical().Read("services/data/cache/mcs_pwd")
 	if err != nil {
 		return "", fmt.Errorf("failed to read secret from Vault: %w", err)
 	}
@@ -130,7 +114,7 @@ func (manager *VaultManager) GetCachePwd() (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid secret data format at path: services/data/cache")
 	}
-	key, ok := data["key"].(string)
+	key, ok := data["value"].(string)
 	if !ok {
 		return "", fmt.Errorf("key not found or invalid in secret data at path: services/data/cache")
 	}
@@ -139,7 +123,7 @@ func (manager *VaultManager) GetCachePwd() (string, error) {
 
 func (manager *VaultManager) GetApiKey(name string) (string, error) {
 	path := fmt.Sprintf("api/data/%s", name)
-	secret, err := manager.Engines.Logical().Read(path)
+	secret, err := manager.Api.Logical().Read(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to read secret from Vault: %w", err)
 	}
@@ -150,7 +134,8 @@ func (manager *VaultManager) GetApiKey(name string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("invalid secret data format at path: %s", path)
 	}
-	key, ok := data["key"].(string)
+
+	key, ok := data["value"].(string)
 	if !ok {
 		return "", fmt.Errorf("key not found or invalid in secret data at path: %s", path)
 	}

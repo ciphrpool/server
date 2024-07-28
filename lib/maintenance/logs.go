@@ -55,6 +55,7 @@ func InitLogger(log_file_path string) error {
 	// File handler
 	log_file, err := os.OpenFile(log_file_path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
+		slog.Error("Cannot open file", "file", log_file_path)
 		return err
 	}
 	file_handler := slog.NewJSONHandler(log_file, &slog.HandlerOptions{Level: slog.LevelInfo})
@@ -66,20 +67,4 @@ func InitLogger(log_file_path string) error {
 	slog.SetDefault(defaultLogger)
 
 	return nil
-}
-
-func Debug(msg string, args ...any) {
-	slog.Debug(msg, args...)
-}
-
-func Info(msg string, args ...any) {
-	slog.Info(msg, args...)
-}
-
-func Warn(msg string, args ...any) {
-	slog.Warn(msg, args...)
-}
-
-func Error(msg string, args ...any) {
-	slog.Error(msg, args...)
 }

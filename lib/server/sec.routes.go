@@ -33,7 +33,7 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 			})
 		})
 
-	engines_group.Post("/new", middleware.OnMode(m.MODE_OPERATIONAL),
+	engines_group.Get("/new", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
 		middleware.WithKey("ENGINES_ADM_KEY", func() (string, error) {

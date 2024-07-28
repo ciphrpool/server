@@ -3,8 +3,8 @@ package security
 import (
 	"backend/lib"
 	"backend/lib/database"
-	m "backend/lib/maintenance"
 	v "backend/lib/vault"
+	"log/slog"
 
 	"github.com/google/uuid"
 
@@ -29,13 +29,9 @@ func InitEngineSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_compl
 	}
 
 	manager.Engines.SetToken(data.VaultEnginesToken)
-	if err := manager.EnablePasswordEngine(); err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
+
 	on_complete(true)
-	m.Info("Successfully load vault engines token")
+	slog.Info("Successfully load vault engines token")
 
 	return ctx.JSON(fiber.Map{
 		"message": "vault engines token set successfully",
@@ -56,18 +52,6 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manage
 		})
 	}
 
-	cache_pwd, err := manager.GenPwd()
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-	if err := cache.NewEngineUser(id, cache_pwd); err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
 	key, err := genAESKey()
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -81,12 +65,7 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manage
 		})
 	}
 
-	if err := manager.StoreEngineCachePwd(id, cache_pwd); err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": err.Error(),
-		})
-	}
-	m.Info("Engine successfully created", "engine", engine)
+	slog.Info("Engine successfully created", "engine", engine)
 	return ctx.JSON(engine)
 }
 
@@ -102,7 +81,6 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 			"error": "invalid request body",
 		})
 	}
-
 	engine, err := cache.GetEngine(data.Id)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -132,7 +110,7 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 
 	engine.Alive = true
 	cache.UpdateEngine(engine)
-	m.Info("Engine successfully connected", "engine", engine)
+	slog.Info("Engine successfully connected", "engine", engine)
 
 	return ctx.JSON(fiber.Map{
 		"status": "accepted",

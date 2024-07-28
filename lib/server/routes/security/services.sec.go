@@ -1,8 +1,8 @@
 package security
 
 import (
-	m "backend/lib/maintenance"
 	v "backend/lib/vault"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,7 +26,7 @@ func InitServicesSecurityHandler(ctx *fiber.Ctx, vault *v.Vault, on_complete fun
 
 	vault.SetToken(data.VaultServicesToken)
 	on_complete(true)
-	m.Info("Successfully load vault services token")
+	slog.Info("Successfully load vault services token")
 
 	return ctx.JSON(fiber.Map{
 		"message": "vault services token set successfully",

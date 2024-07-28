@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -37,6 +38,14 @@ type MSS struct {
 type MSSTransition struct {
 	From MSS
 	To   MSS
+}
+
+var transitions = map[MSSTransition]struct{}{
+	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_INIT}, MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SERVICES}}:     {},
+	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SERVICES}, MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SECURITY}}: {},
+	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SECURITY}, MSS{MODE_OPERATIONAL, STATE_RUNNING, SUBSTATE_SAFE}}:              {},
+	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SECURITY}, MSS{MODE_OPERATIONAL, STATE_RUNNING, SUBSTATE_UNSAFE}}:            {},
+	{MSS{MODE_OPERATIONAL, STATE_RUNNING, SUBSTATE_SAFE}, MSS{MODE_OPERATIONAL, STATE_RUNNING, SUBSTATE_UNSAFE}}:                         {},
 }
 
 func names(mode Mode, state State, substate SubState) (string, string, string) {
@@ -76,10 +85,6 @@ func names(mode Mode, state State, substate SubState) (string, string, string) {
 	return mode_name, state_name, substate_name
 }
 
-var transitions = map[MSSTransition]struct{}{
-	{MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_INIT}, MSS{MODE_INIT, STATE_CONFIGURING, SUBSTATE_CONFIGURING_SERVICES}}: {},
-}
-
 type StateMachine struct {
 	mode     Mode
 	state    State
@@ -112,9 +117,12 @@ func (state_machine *StateMachine) To(mode Mode, state State, substate SubState)
 	if _, ok := transitions[MSSTransition{MSS{current_mode, current_state, current_substate}, MSS{mode, state, substate}}]; ok {
 		state_machine.accept(mode, state, substate)
 		return nil
+	} else if state == STATE_FAILED || substate == SUBSTATE_FAILED {
+		state_machine.accept(mode, STATE_FAILED, SUBSTATE_FAILED)
+		return nil
 	} else {
 		mode_name, state_name, substate_name := names(mode, state, substate)
-		Warn("MSS : Invalid mode state substate transition", "mode", mode_name, "state", state_name, "substate", substate_name)
+		slog.Warn("MSS : Invalid mode state substate transition", "mode", mode_name, "state", state_name, "substate", substate_name)
 		return fmt.Errorf("invalid mode state substate transition")
 	}
 }
@@ -133,7 +141,7 @@ func (state_machine *StateMachine) accept(mode Mode, state State, substate SubSt
 	state_machine.state = state
 	state_machine.substate = substate
 	mode_name, state_name, substate_name := names(mode, state, substate)
-	Info("MSS : transition done", "mode", mode_name, "state", state_name, "substate", substate_name)
+	slog.Info("MSS : transition done", "mode", mode_name, "state", state_name, "substate", substate_name)
 }
 
 func (state_machine *StateMachine) When(mode Mode, state State, substate SubState, callback func()) {

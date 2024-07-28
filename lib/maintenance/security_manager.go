@@ -1,6 +1,9 @@
 package maintenance
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+)
 
 type SecurityManager struct {
 	enginesTokenApplication     bool
@@ -37,12 +40,12 @@ func (manager *SecurityManager) Start(state_machine *StateMachine) {
 			select {
 			case is_applied := <-manager.ChanServicesTokenApplication:
 				if is_applied {
-					Debug("SecurityManager : The services token is applied")
+					slog.Debug("SecurityManager : The services token is applied")
 					manager.servicesTokenApplication = true
 				}
 			case is_applied := <-manager.ChanApiTokenApplication:
 				if is_applied {
-					Debug("SecurityManager : The api token is applied")
+					slog.Debug("SecurityManager : The api token is applied")
 					manager.apiTokenApplication = true
 				}
 			}
@@ -60,7 +63,7 @@ func (manager *SecurityManager) Start(state_machine *StateMachine) {
 			select {
 			case is_applied := <-manager.ChanEnginesTokenApplication:
 				if is_applied {
-					Debug("SecurityManager : The engines token is applied")
+					slog.Debug("SecurityManager : The engines token is applied")
 					manager.enginesTokenApplication = true
 				}
 

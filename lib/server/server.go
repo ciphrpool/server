@@ -5,6 +5,7 @@ import (
 	"backend/lib/maintenance"
 	"backend/lib/server/middleware"
 	"backend/lib/vault"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -49,7 +50,7 @@ func New() (*MaintenanceServer, error) {
 
 func (server *MaintenanceServer) Configure() {
 	err := maintenance.InitLogger("mcs.log")
-	if err != nil {
+	if err == nil {
 		server.App.Use(middleware.Logger())
 	}
 	server.App.Use(func(c *fiber.Ctx) error {
@@ -66,7 +67,7 @@ func (server *MaintenanceServer) Configure() {
 }
 
 func (server *MaintenanceServer) Start() {
-	maintenance.Info("Starting the server")
+	slog.Info("Starting the server")
 
 	server.Configure()
 	server.RegisterRoutes()
@@ -77,15 +78,18 @@ func (server *MaintenanceServer) Start() {
 		maintenance.STATE_CONFIGURING,
 		maintenance.SUBSTATE_CONFIGURING_SERVICES,
 		func() {
+			slog.Info("Connecting services ...")
 			// Connect all services
 			cache_pwd, err := server.VaultManager.GetCachePwd()
 			if err != nil {
+				slog.Error("Cache pwd retrieval failed", "error", err)
 				// raise fault
 				return
 			}
 			err = server.Cache.Connect(cache_pwd)
 			if err != nil {
 				// raise fault
+				slog.Error("Cache connection failed", "error", err)
 				return
 			}
 			server.StateMachine.To(maintenance.MODE_INIT, maintenance.STATE_CONFIGURING, maintenance.SUBSTATE_CONFIGURING_SECURITY)

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -21,8 +22,9 @@ func WithKey(key string, real_key func() (string, error)) fiber.Handler {
 		apiKey := c.Get(key)
 		correct_key, err := real_key()
 		if err != nil {
+			slog.Error(err.Error())
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "cannont check API key",
+				"error": "cannot check API key",
 			})
 		}
 		if apiKey != correct_key {
