@@ -6,6 +6,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func OnMSS(mode Mode, state State, substate SubState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		state_machine := c.Locals("StateMachine").(*StateMachine)
+		current_mode, current_state, current_substate := state_machine.Get()
+
+		if mode != current_mode || current_state != state || substate != current_substate {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "Maintenance server in invalid mode",
+			})
+		}
+		return c.Next()
+	}
+}
+
 func OnMode(required Mode) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		state_machine := c.Locals("StateMachine").(*StateMachine)

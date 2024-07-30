@@ -74,6 +74,7 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 	var data struct {
 		Id       string `json:"id"`
 		Password string `json:"password"`
+		Url      string `json:"url"`
 	}
 
 	if err := ctx.BodyParser(&data); err != nil {
@@ -109,6 +110,7 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 	}
 
 	engine.Alive = true
+	engine.Url = data.Url
 	cache.UpdateEngine(engine)
 	slog.Info("Engine successfully connected", "engine", engine)
 
