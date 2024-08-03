@@ -17,7 +17,8 @@ func ArenaUnregisteredHandler(ctx *fiber.Ctx, cache *database.Cache) error {
 	}
 
 	var response struct {
-		Url       string `json:"url"`
+		WS_Url    string `json:"ws_url"`
+		SSE_Url   string `json:"sse_url"`
 		SessionId string `json:"session_id"`
 	}
 
@@ -36,7 +37,10 @@ func ArenaUnregisteredHandler(ctx *fiber.Ctx, cache *database.Cache) error {
 		ws_url = "wss://" + strings.TrimPrefix(ws_url, "https://")
 	}
 
-	response.Url = fmt.Sprintf("%s/ws/arena/", ws_url)
+	sse_url := engine.Url
+
+	response.WS_Url = fmt.Sprintf("%s/ws/arena/", ws_url)
+	response.SSE_Url = fmt.Sprintf("%s/sse/arena/", sse_url)
 	response.SessionId = session_id
 
 	return ctx.JSON(response)
