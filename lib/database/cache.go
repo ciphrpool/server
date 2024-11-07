@@ -41,80 +41,80 @@ func (cache *Cache) Connect(password string) error {
 	return nil
 }
 
-func (cache *Cache) AddEngine(engine lib.Engine) error {
-	if engine.Id == "" {
-		engine.Id = uuid.New().String()
+func (cache *Cache) AddEngine(nexuspool lib.NexusPool) error {
+	if nexuspool.Id == "" {
+		nexuspool.Id = uuid.New().String()
 	}
 	ctx := context.Background()
-	engine_json, err := json.Marshal(engine)
+	nexuspool_json, err := json.Marshal(nexuspool)
 	if err != nil {
-		return fmt.Errorf("failed to marshal engine: %w", err)
+		return fmt.Errorf("failed to marshal nexuspool: %w", err)
 	}
 
-	err = cache.Db.Set(ctx, fmt.Sprintf("engine:%s", engine.Id), engine_json, 0).Err()
+	err = cache.Db.Set(ctx, fmt.Sprintf("nexuspool:%s", nexuspool.Id), nexuspool_json, 0).Err()
 	if err != nil {
-		return fmt.Errorf("failed to add engine: %w", err)
+		return fmt.Errorf("failed to add nexuspool: %w", err)
 	}
 	return nil
 }
 
-func (cache *Cache) GetEngine(id string) (lib.Engine, error) {
-	var engine lib.Engine
+func (cache *Cache) GetEngine(id string) (lib.NexusPool, error) {
+	var nexuspool lib.NexusPool
 	ctx := context.Background()
-	engine_json, err := cache.Db.Get(ctx, fmt.Sprintf("engine:%s", id)).Result()
+	nexuspool_json, err := cache.Db.Get(ctx, fmt.Sprintf("nexuspool:%s", id)).Result()
 	if err == redis.Nil {
-		return engine, fmt.Errorf("engine with ID %s does not exist", id)
+		return nexuspool, fmt.Errorf("nexuspool with ID %s does not exist", id)
 	} else if err != nil {
-		return engine, fmt.Errorf("failed to get engine: %w", err)
+		return nexuspool, fmt.Errorf("failed to get nexuspool: %w", err)
 	}
-	if err := json.Unmarshal([]byte(engine_json), &engine); err != nil {
-		return engine, fmt.Errorf("failed to unmarshal engine data: %w", err)
+	if err := json.Unmarshal([]byte(nexuspool_json), &nexuspool); err != nil {
+		return nexuspool, fmt.Errorf("failed to unmarshal nexuspool data: %w", err)
 	}
-	return engine, nil
+	return nexuspool, nil
 }
 
-func (cache *Cache) UpdateEngine(engine lib.Engine) error {
-	if engine.Id == "" {
-		return fmt.Errorf("engine ID cannot be empty")
+func (cache *Cache) UpdateEngine(nexuspool lib.NexusPool) error {
+	if nexuspool.Id == "" {
+		return fmt.Errorf("nexuspool ID cannot be empty")
 	}
 	ctx := context.Background()
-	engine_json, err := json.Marshal(engine)
+	nexuspool_json, err := json.Marshal(nexuspool)
 	if err != nil {
-		return fmt.Errorf("failed to marshal engine: %w", err)
+		return fmt.Errorf("failed to marshal nexuspool: %w", err)
 	}
-	err = cache.Db.Set(ctx, fmt.Sprintf("engine:%s", engine.Id), engine_json, 0).Err()
+	err = cache.Db.Set(ctx, fmt.Sprintf("nexuspool:%s", nexuspool.Id), nexuspool_json, 0).Err()
 	if err != nil {
-		return fmt.Errorf("failed to update engine: %w", err)
+		return fmt.Errorf("failed to update nexuspool: %w", err)
 	}
 	return nil
 }
-func (cache *Cache) SearchAliveEngine() (lib.Engine, error) {
+func (cache *Cache) SearchAliveEngine() (lib.NexusPool, error) {
 	ctx := context.Background()
 
 	// Use SCAN to iterate through all keys
 	var cursor uint64
-	var engine lib.Engine
+	var nexuspool lib.NexusPool
 
 	for {
 		var keys []string
 		var err error
-		keys, cursor, err = cache.Db.Scan(ctx, cursor, "engine:*", 10).Result()
+		keys, cursor, err = cache.Db.Scan(ctx, cursor, "nexuspool:*", 10).Result()
 		if err != nil {
-			return engine, fmt.Errorf("failed to scan keys: %w", err)
+			return nexuspool, fmt.Errorf("failed to scan keys: %w", err)
 		}
 
 		for _, key := range keys {
-			engine_json, err := cache.Db.Get(ctx, key).Result()
+			nexuspool_json, err := cache.Db.Get(ctx, key).Result()
 			if err != nil {
 				continue
 			}
 
-			if err := json.Unmarshal([]byte(engine_json), &engine); err != nil {
+			if err := json.Unmarshal([]byte(nexuspool_json), &nexuspool); err != nil {
 				continue
 			}
 
-			if engine.Alive {
-				return engine, nil
+			if nexuspool.Alive {
+				return nexuspool, nil
 			}
 		}
 
@@ -123,8 +123,8 @@ func (cache *Cache) SearchAliveEngine() (lib.Engine, error) {
 		}
 	}
 
-	// If no alive engine is found
-	return engine, fmt.Errorf("no alive engine found")
+	// If no alive nexuspool is found
+	return nexuspool, fmt.Errorf("no alive nexuspool found")
 }
 
 func (cache *Cache) UpsertArenaSession(client_ip string) (string, error) {

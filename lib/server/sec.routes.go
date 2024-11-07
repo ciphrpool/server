@@ -18,17 +18,17 @@ func (server *MaintenanceServer) RegisterSecurityRoutes() {
 }
 
 func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Router) {
-	engines_group := routes.Group("/engines")
+	engines_group := routes.Group("/nexuspool")
 
 	engines_group.Post("/init",
 		middleware.OnMode(m.MODE_INIT),
 		middleware.OnState(m.STATE_CONFIGURING),
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_SECURITY),
-		middleware.WithKey("ENGINES_INIT_KEY", func() (string, error) {
-			return server.VaultManager.GetApiKey("ENGINES_INIT_KEY")
+		middleware.WithKey("NEXUSPOOL_INIT_KEY", func() (string, error) {
+			return server.VaultManager.GetApiKey("NEXUSPOOL_INIT_KEY")
 		}),
 		func(c *fiber.Ctx) error {
-			return security.InitEngineSecurityHandler(c, &server.VaultManager, func(result bool) {
+			return security.InitNexusPoolSecurityHandler(c, &server.VaultManager, func(result bool) {
 				server.SecurityManager.ChanEnginesTokenApplication <- result
 			})
 		})
@@ -36,8 +36,8 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 	engines_group.Get("/new", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
-		middleware.WithKey("ENGINES_ADM_KEY", func() (string, error) {
-			return server.VaultManager.GetApiKey("ENGINES_ADM_KEY")
+		middleware.WithKey("NEXUSPOOL_ADM_KEY", func() (string, error) {
+			return server.VaultManager.GetApiKey("NEXUSPOOL_ADM_KEY")
 		}),
 		func(c *fiber.Ctx) error {
 			return security.RequestEngineConnexionHandler(c, &server.Cache, &server.VaultManager)
@@ -47,8 +47,8 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 	engines_group.Post("/connect", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
-		middleware.WithKey("ENGINES_ADM_KEY", func() (string, error) {
-			return server.VaultManager.GetApiKey("ENGINES_ADM_KEY")
+		middleware.WithKey("NEXUSPOOL_ADM_KEY", func() (string, error) {
+			return server.VaultManager.GetApiKey("NEXUSPOOL_ADM_KEY")
 		}),
 		func(c *fiber.Ctx) error {
 			return security.ConnectHandler(c, &server.Cache, &server.VaultManager)

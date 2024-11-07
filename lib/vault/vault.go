@@ -11,9 +11,9 @@ import (
 type Vault = v.Client
 
 type VaultManager struct {
-	Engines  *Vault
-	Api      *Vault
-	Services *Vault
+	NexusPool *Vault
+	Api       *Vault
+	Services  *Vault
 }
 
 func NewVaultManager() (VaultManager, error) {
@@ -21,7 +21,7 @@ func NewVaultManager() (VaultManager, error) {
 		Address: os.Getenv("VAULT_ADDR"),
 	}
 
-	engines, err := v.NewClient(&config)
+	nexuspool, err := v.NewClient(&config)
 	if err != nil {
 		return VaultManager{}, fmt.Errorf("failed to create Vault client: %w", err)
 	}
@@ -37,23 +37,23 @@ func NewVaultManager() (VaultManager, error) {
 	}
 
 	vault_manager := VaultManager{
-		Engines:  engines,
-		Api:      api,
-		Services: services,
+		NexusPool: nexuspool,
+		Api:       api,
+		Services:  services,
 	}
 	return vault_manager, nil
 }
 
 func (manager *VaultManager) Health() bool {
-	engine_health, err := manager.Engines.Sys().Health()
+	engine_health, err := manager.NexusPool.Sys().Health()
 	if err != nil {
 		return false
 	}
-	api_health, err := manager.Engines.Sys().Health()
+	api_health, err := manager.Api.Sys().Health()
 	if err != nil {
 		return false
 	}
-	services_health, err := manager.Engines.Sys().Health()
+	services_health, err := manager.Services.Sys().Health()
 	if err != nil {
 		return false
 	}
@@ -64,11 +64,11 @@ func (manager *VaultManager) Health() bool {
 		(services_health.Initialized && services_health.Sealed)
 }
 
-func (manager *VaultManager) StoreEngineAESKey(id string, key string) error {
+func (manager *VaultManager) StoreNexusPoolAESKey(id string, key string) error {
 	secret := map[string]interface{}{
 		"key": key,
 	}
-	kvv2 := manager.Engines.KVv2("engines")
+	kvv2 := manager.NexusPool.KVv2("nexuspool")
 
 	// Write the secret
 	_, err := kvv2.Put(context.Background(), fmt.Sprintf("aes/%s", id), secret)
@@ -82,8 +82,8 @@ func (manager *VaultManager) StoreEngineAESKey(id string, key string) error {
 	return err
 }
 
-func (manager *VaultManager) GetEngineAESKey(id string) (string, error) {
-	kvv2 := manager.Engines.KVv2("engines")
+func (manager *VaultManager) GetNexusPoolAESKey(id string) (string, error) {
+	kvv2 := manager.NexusPool.KVv2("nexuspool")
 	path := fmt.Sprintf("aes/%s", id)
 
 	secret, err := kvv2.Get(context.Background(), path)

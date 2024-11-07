@@ -11,9 +11,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func InitEngineSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_complete func(bool)) error {
+func InitNexusPoolSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_complete func(bool)) error {
 	var data struct {
-		VaultEnginesToken string `json:"vault_engines_token"`
+		VaultNexusPoolToken string `json:"vault_nexuspool_token"`
 	}
 	if err := ctx.BodyParser(&data); err != nil {
 		on_complete(false)
@@ -21,14 +21,14 @@ func InitEngineSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_compl
 			"error": "invalid request body",
 		})
 	}
-	if data.VaultEnginesToken == "" {
+	if data.VaultNexusPoolToken == "" {
 		on_complete(false)
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "vault_engines_token is required",
+			"error": "vault_nexuspool_token is required",
 		})
 	}
 
-	manager.Engines.SetToken(data.VaultEnginesToken)
+	manager.NexusPool.SetToken(data.VaultNexusPoolToken)
 
 	on_complete(true)
 	slog.Info("Successfully load vault engines token")
@@ -41,12 +41,12 @@ func InitEngineSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_compl
 func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManager) error {
 	id := uuid.New().String()
 
-	engine := lib.Engine{
+	nexuspool := lib.NexusPool{
 		Id:    id,
 		Alive: false,
 	}
 
-	if err := cache.AddEngine(engine); err != nil {
+	if err := cache.AddEngine(nexuspool); err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -59,14 +59,14 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manage
 		})
 	}
 
-	if err := manager.StoreEngineAESKey(id, key); err != nil {
+	if err := manager.StoreNexusPoolAESKey(id, key); err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	slog.Info("Engine successfully created", "engine", engine)
-	return ctx.JSON(engine)
+	slog.Info("Engine successfully created", "engine", nexuspool)
+	return ctx.JSON(nexuspool)
 }
 
 func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManager) error {
@@ -89,7 +89,7 @@ func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManag
 		})
 	}
 
-	key, err := manager.GetEngineAESKey(engine.Id)
+	key, err := manager.GetNexusPoolAESKey(engine.Id)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),

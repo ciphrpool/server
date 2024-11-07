@@ -2,7 +2,7 @@ package lib
 
 import "time"
 
-type Engine struct {
+type NexusPool struct {
 	Id    string `json:"id"`
 	Alive bool   `json:"alive"`
 	Url   string `json:"url"`
