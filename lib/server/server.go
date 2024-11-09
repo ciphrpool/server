@@ -1,9 +1,9 @@
 package server
 
 import (
-	"backend/lib/database"
 	"backend/lib/maintenance"
 	"backend/lib/server/middleware"
+	"backend/lib/services"
 	"backend/lib/vault"
 	"log/slog"
 
@@ -15,8 +15,8 @@ import (
 
 type MaintenanceServer struct {
 	*fiber.App
-	Db              database.Database
-	Cache           database.Cache
+	Db              services.Database
+	Cache           services.Cache
 	VaultManager    vault.VaultManager
 	SecurityManager maintenance.SecurityManager
 	StateMachine    maintenance.StateMachine
@@ -32,13 +32,13 @@ func New() (*MaintenanceServer, error) {
 		return nil, err
 	}
 
-	cache, err := database.NewCache()
+	cache, err := services.NewCache()
 	if err != nil {
 		return nil, err
 	}
 	server := MaintenanceServer{
 		App:             fiber.New(),
-		Db:              database.New(),
+		Db:              services.NewDatabase(),
 		Cache:           cache,
 		VaultManager:    vault_manager,
 		SecurityManager: security_manager,

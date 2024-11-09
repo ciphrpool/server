@@ -1,4 +1,4 @@
-package database
+package services
 
 import (
 	"context"
@@ -28,7 +28,7 @@ var (
 	host     = os.Getenv("DB_HOST")
 )
 
-func New() Database {
+func NewDatabase() Database {
 	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {

@@ -2,7 +2,7 @@ package security
 
 import (
 	"backend/lib"
-	"backend/lib/database"
+	"backend/lib/services"
 	v "backend/lib/vault"
 	"log/slog"
 
@@ -38,7 +38,7 @@ func InitNexusPoolSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_co
 	})
 }
 
-func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManager) error {
+func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManager) error {
 	id := uuid.New().String()
 
 	nexuspool := lib.NexusPool{
@@ -69,7 +69,7 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *database.Cache, manage
 	return ctx.JSON(nexuspool)
 }
 
-func ConnectHandler(ctx *fiber.Ctx, cache *database.Cache, manager *v.VaultManager) error {
+func ConnectHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManager) error {
 
 	var data struct {
 		Id       string `json:"id"`

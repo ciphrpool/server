@@ -1,14 +1,14 @@
 package routes
 
 import (
-	"backend/lib/database"
+	"backend/lib/services"
 	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-func ArenaUnregisteredHandler(ctx *fiber.Ctx, cache *database.Cache) error {
+func ArenaUnregisteredHandler(ctx *fiber.Ctx, cache *services.Cache) error {
 	engine, err := cache.SearchAliveEngine()
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
