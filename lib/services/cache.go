@@ -2,6 +2,7 @@ package services
 
 import (
 	"backend/lib"
+	"backend/lib/server/middleware"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -17,10 +19,10 @@ type Cache struct {
 	Db *redis.Client
 }
 
-func NewCache() (Cache, error) {
+func DefaultCache() Cache {
 	return Cache{
 		Db: nil,
-	}, nil
+	}
 }
 
 func (cache *Cache) Connect(password string) error {
@@ -221,4 +223,31 @@ func (cache *Cache) StartPeriodicCleanups() {
 			}
 		}
 	}()
+}
+
+type WaitingRoomData struct {
+	Player1ID pgtype.UUID `json:"player_1"`
+	Player2ID pgtype.UUID `json:"player_2"`
+}
+
+func (cache *Cache) UpsertDuelWaitingRoom(waiting_room WaitingRoomData) (string, error) {
+	ctx := context.Background()
+
+	waiting_room_key := fmt.Sprintf("duel:waiting_room:id:%s-%s", middleware.UUIDToString(waiting_room.Player1ID), middleware.UUIDToString(waiting_room.Player2ID))
+	waiting_room_id, err := cache.Db.Get(ctx, waiting_room_key).Result()
+	if err == nil {
+		return waiting_room_id, nil
+	} else if err != redis.Nil {
+		// An error occurred other than key not existing
+		return "", fmt.Errorf("failed to check existing waiting_room: %w", err)
+	}
+
+	waiting_room_id = uuid.New().String()
+
+	err = cache.Db.Set(ctx, waiting_room_key, waiting_room_id, 10).Err()
+	if err != nil {
+		return "", fmt.Errorf("failed to create arena session: %w", err)
+	}
+
+	return waiting_room_id, nil
 }

@@ -32,14 +32,10 @@ func New() (*MaintenanceServer, error) {
 		return nil, err
 	}
 
-	cache, err := services.NewCache()
-	if err != nil {
-		return nil, err
-	}
 	server := MaintenanceServer{
 		App:             fiber.New(),
-		Db:              services.NewDatabase(),
-		Cache:           cache,
+		Db:              services.DefaultDatabase(),
+		Cache:           services.DefaultCache(),
 		VaultManager:    vault_manager,
 		SecurityManager: security_manager,
 		StateMachine:    maintenance.NewStateMachine(),
@@ -86,10 +82,22 @@ func (server *MaintenanceServer) Start() {
 				// raise fault
 				return
 			}
+			db_pwd, err := server.VaultManager.GetDbPwd()
+			if err != nil {
+				slog.Error("Cache pwd retrieval failed", "error", err)
+				// raise fault
+				return
+			}
 			err = server.Cache.Connect(cache_pwd)
 			if err != nil {
 				// raise fault
 				slog.Error("Cache connection failed", "error", err)
+				return
+			}
+			err = server.Db.Connect(db_pwd)
+			if err != nil {
+				// raise fault
+				slog.Error("Db connection failed", "error", err)
 				return
 			}
 			server.StateMachine.To(maintenance.MODE_INIT, maintenance.STATE_CONFIGURING, maintenance.SUBSTATE_CONFIGURING_SECURITY)

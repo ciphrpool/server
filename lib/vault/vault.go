@@ -121,6 +121,25 @@ func (manager *VaultManager) GetCachePwd() (string, error) {
 	return key, nil
 }
 
+func (manager *VaultManager) GetDbPwd() (string, error) {
+	secret, err := manager.Services.Logical().Read("services/data/db/mcs_pwd")
+	if err != nil {
+		return "", fmt.Errorf("failed to read secret from Vault: %w", err)
+	}
+	if secret == nil || secret.Data == nil {
+		return "", fmt.Errorf("no secret found at path: services/data/db")
+	}
+	data, ok := secret.Data["data"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("invalid secret data format at path: services/data/db")
+	}
+	key, ok := data["value"].(string)
+	if !ok {
+		return "", fmt.Errorf("key not found or invalid in secret data at path: services/data/db")
+	}
+	return key, nil
+}
+
 func (manager *VaultManager) GetApiKey(name string) (string, error) {
 	path := fmt.Sprintf("api/data/%s", name)
 	secret, err := manager.Api.Logical().Read(path)

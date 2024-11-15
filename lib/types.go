@@ -15,3 +15,6 @@ type ArenaSession struct {
 	Started                 bool      `json:"started"`
 	UserIP                  string    `json:"user_ip"`
 }
+
+type DuelSession struct {
+}
