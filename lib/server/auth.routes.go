@@ -35,18 +35,18 @@ func (server *MaintenanceServer) RegisterAuthRoutes() {
 	})
 
 	// Token management
-	auth_group.Post("/refresh/session",
+	auth_group.Get("/refresh/session",
 		func(c *fiber.Ctx) error {
 			return routes.RefreshSessionHandler(c, server.AuthService, &server.Cache, server.Sessions)
 		},
 	)
-	auth_group.Post("/refresh/access",
+	auth_group.Get("/refresh/access",
 		middleware.RequireSession(&server.AuthService, server.Sessions),
 		func(c *fiber.Ctx) error {
 			return routes.RefreshAccessTokenHandler(c, server.AuthService, &server.Cache)
 		},
 	)
-	auth_group.Post("/refresh/refresh",
+	auth_group.Get("/refresh/refresh",
 		middleware.RequireSession(&server.AuthService, server.Sessions),
 		func(c *fiber.Ctx) error {
 			return routes.RefreshAllTokenHandler(c, server.AuthService, &server.Cache)

@@ -89,7 +89,6 @@ func (server *MaintenanceServer) Configure() {
 	store := session.New(session.Config{
 		Expiration:     24 * time.Hour,
 		KeyLookup:      "cookie:session", // "<source>:<key>"
-		CookieDomain:   "localhost",
 		CookiePath:     "/",
 		CookieSecure:   false, // Set to true in production with HTTPS
 		CookieHTTPOnly: true,

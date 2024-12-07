@@ -6,7 +6,6 @@ import (
 	"backend/lib/services"
 	"backend/lib/vault"
 	"fmt"
-	"log/slog"
 
 	basepool "github.com/ciphrpool/base-pool/gen"
 	"github.com/gofiber/fiber/v2"
@@ -66,7 +65,7 @@ func OAuthCallbackHandler(
 	}
 
 	// Create session
-	session_id, err := auth.CreateSession(c, token_pair_with_user_info.UserID, sessions)
+	_, err = auth.CreateSession(c, token_pair_with_user_info.UserID, sessions)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create session",
@@ -75,8 +74,6 @@ func OAuthCallbackHandler(
 
 	c.Set("X-CSRF-Token", token_pair_with_user_info.TokenPair.CSRFToken)
 	c.Set("X-Refresh-Token", token_pair_with_user_info.TokenPair.RefreshToken)
-	slog.Debug("SESSION ID", "session id", session_id)
-	c.Set("X-Session-ID", session_id)
 
 	// Return access token and expiry
 	return c.JSON(fiber.Map{
@@ -99,7 +96,7 @@ func RefreshAccessTokenHandler(c *fiber.Ctx, auth *authentication.AuthService, c
 		})
 	}
 
-	access_token, expiresAt, err := auth.RefreshUserAccessToken(c.Context(), csrf_token, refreshToken, cache)
+	access_token, expiresAt, err := auth.RefreshUserAccessToken(c.Context(), refreshToken, csrf_token, cache)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid refresh token",
@@ -127,14 +124,12 @@ func RefreshSessionHandler(c *fiber.Ctx, auth *authentication.AuthService, cache
 		})
 	}
 
-	session_id, err := auth.CreateSession(c, claims.UserID, sessions)
+	_, err = auth.CreateSession(c, claims.UserID, sessions)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create session",
 		})
 	}
-	slog.Debug("SESSION ID", "session id", session_id)
-	c.Set("X-Session-ID", session_id)
 
 	return c.SendStatus(fiber.StatusAccepted)
 }

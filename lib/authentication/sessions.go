@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -56,26 +55,23 @@ func (a *AuthService) CreateSession(
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
 
-	if sess.Fresh() {
-		// Store the complete session data
-		sessionDataJSON, err := json.Marshal(sessionData)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal session data: %w", err)
-		}
-
-		// Store session data
-		sess.Set("data", string(sessionDataJSON))
-
-		// Set session expiry
-		sess.SetExpiry(sessionDuration)
-
-		// Save session
-		if err := sess.Save(); err != nil {
-			return "", fmt.Errorf("failed to save session: %w", err)
-		}
-		slog.Debug("CREATED SESSION ID", "session id", sess.ID())
+	// Store the complete session data
+	sessionDataJSON, err := json.Marshal(sessionData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal session data: %w", err)
 	}
-	return sess.ID(), nil
+
+	// Store session data
+	sess.Set("data", string(sessionDataJSON))
+
+	// Set session expiry
+	sess.SetExpiry(sessionDuration)
+	id := sess.ID()
+	// Save session
+	if err := sess.Save(); err != nil {
+		return "", fmt.Errorf("failed to save session: %w", err)
+	}
+	return id, nil
 }
 
 // ValidateSession validates a session and updates last seen time

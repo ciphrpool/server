@@ -10,10 +10,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	math_rand "math/rand"
-	"reflect"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -144,9 +142,6 @@ func (s *JWTTokenService) GenerateTokenPair(ctx context.Context, userID pgtype.U
 	}
 
 	refreshClaimsJSON, err := json.Marshal(refreshClaims)
-	slog.Debug("GENERATE CLAIMS", "time.Now().Unix()", time.Now().Unix())
-	slog.Debug("GENERATE CLAIMS", "time.Now().Unix() type", reflect.TypeOf(time.Now().Unix()))
-	slog.Debug("GENERATE CLAIMS", "refreshClaimsJSON", refreshClaimsJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal refresh claims: %w", err)
 	}
@@ -159,7 +154,6 @@ func (s *JWTTokenService) GenerateTokenPair(ctx context.Context, userID pgtype.U
 	if err != nil {
 		return nil, fmt.Errorf("failed to store refresh token: %w", err)
 	}
-
 	return &TokenPair{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -223,8 +217,6 @@ func (s *JWTTokenService) ValidateRefreshToken(ctx context.Context, refreshToken
 		return nil, ErrInvalidToken
 	}
 	// Convert to Claims struct
-	slog.Debug("CLAIMS IN VALIDATE REFRESH TOKEN", "created_at", int64(math.Round(claims["created_at"].(float64))))
-	slog.Debug("CLAIMS IN VALIDATE REFRESH TOKEN", "created_at_type", reflect.TypeOf(claims["created_at"]))
 	return &Claims{
 		UserID:    user_id,
 		ExpiresAt: int64(math.Round(claims["created_at"].(float64))) + int64(math.Round(s.refreshDuration.Seconds())),
