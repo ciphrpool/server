@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"backend/lib/server/middleware"
 	"backend/lib/services"
 	"context"
 	"time"
@@ -14,7 +15,7 @@ type SearchByUsernameParams struct {
 	Detailed bool   `query:"detailed"`
 }
 
-func SearchByUsername(params SearchByUsernameParams, ctx *fiber.Ctx, db *services.Database) error {
+func SearchByUsernameHandler(params SearchByUsernameParams, ctx *fiber.Ctx, db *services.Database) error {
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
@@ -47,7 +48,7 @@ type GetUserByTagParams struct {
 	Detailed bool   `query:"detailed"`
 }
 
-func GetUserByTag(params GetUserByTagParams, ctx *fiber.Ctx, db *services.Database) error {
+func GetUserByTagHandler(params GetUserByTagParams, ctx *fiber.Ctx, db *services.Database) error {
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
@@ -73,4 +74,29 @@ func GetUserByTag(params GetUserByTagParams, ctx *fiber.Ctx, db *services.Databa
 			"users": users,
 		})
 	}
+}
+
+type GetSelfParams struct {
+}
+
+func GetSelfHandler(params GetSelfParams, ctx *fiber.Ctx, db *services.Database) error {
+	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	queries := basepool.New(db.Pool)
+
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unknown user",
+		})
+	}
+	user, err := queries.GetUserByID(query_ctx, user_id)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "user not found",
+		})
+	}
+	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"user": user,
+	})
 }

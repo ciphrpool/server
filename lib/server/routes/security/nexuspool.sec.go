@@ -1,7 +1,6 @@
 package security
 
 import (
-	"backend/lib"
 	"backend/lib/services"
 	v "backend/lib/vault"
 	"log/slog"
@@ -31,22 +30,22 @@ func InitNexusPoolSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_co
 	manager.NexusPool.SetToken(data.VaultNexusPoolToken)
 
 	on_complete(true)
-	slog.Info("Successfully load vault engines token")
+	slog.Info("Successfully load vault nexuspools token")
 
 	return ctx.JSON(fiber.Map{
-		"message": "vault engines token set successfully",
+		"message": "vault nexuspools token set successfully",
 	})
 }
 
-func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManager) error {
+func RequestNexusPoolConnexionHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManager) error {
 	id := uuid.New().String()
 
-	nexuspool := lib.NexusPool{
+	nexuspool := services.NexusPool{
 		Id:    id,
 		Alive: false,
 	}
 
-	if err := cache.AddEngine(nexuspool); err != nil {
+	if err := cache.AddNexusPool(nexuspool); err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
@@ -65,7 +64,7 @@ func RequestEngineConnexionHandler(ctx *fiber.Ctx, cache *services.Cache, manage
 		})
 	}
 
-	slog.Info("Engine successfully created", "engine", nexuspool)
+	slog.Info("NexusPool successfully created", "nexuspool", nexuspool)
 	return ctx.JSON(nexuspool)
 }
 
@@ -82,14 +81,14 @@ func ConnectHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManag
 			"error": "invalid request body",
 		})
 	}
-	engine, err := cache.GetEngine(data.Id)
+	nexuspool, err := cache.GetNexusPool(data.Id)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	key, err := manager.GetNexusPoolAESKey(engine.Id)
+	key, err := manager.GetNexusPoolAESKey(nexuspool.Id)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
@@ -109,10 +108,10 @@ func ConnectHandler(ctx *fiber.Ctx, cache *services.Cache, manager *v.VaultManag
 		})
 	}
 
-	engine.Alive = true
-	engine.Url = data.Url
-	cache.UpdateEngine(engine)
-	slog.Info("Engine successfully connected", "engine", engine)
+	nexuspool.Alive = true
+	nexuspool.Url = data.Url
+	cache.UpdateNexusPool(nexuspool)
+	slog.Info("NexusPool successfully connected", "nexuspool", nexuspool)
 
 	return ctx.JSON(fiber.Map{
 		"status": "accepted",

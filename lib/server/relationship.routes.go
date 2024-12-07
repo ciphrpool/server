@@ -10,15 +10,13 @@ import (
 
 func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 	relationship_group := server.App.Group("/relationship")
-
-	request_group := relationship_group.Group("/request")
-
-	request_group.Use(middleware.ForAuthentificatedUser(func() (string, error) {
-		return server.VaultManager.GetApiKey("MCS_JWT_KEY")
-	}))
-
-	request_group.Post("/friend",
+	relationship_group.Use(
 		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
+	)
+
+	relationship_group.Use(middleware.Protected(&server.AuthService))
+
+	relationship_group.Post("/friend",
 		func(c *fiber.Ctx) error {
 			var data routes.FriendRequestData
 
@@ -31,36 +29,8 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 			return routes.FriendRequestHandler(data, c, &server.Db)
 		},
 	)
-	request_group.Post("/block",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
-		func(c *fiber.Ctx) error {
-			var data routes.BlockUserData
 
-			if err := c.BodyParser(&data); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "invalid request body",
-				})
-			}
-
-			return routes.BlockUserHandler(data, c, &server.Db)
-		},
-	)
-	request_group.Post("/unblock",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
-		func(c *fiber.Ctx) error {
-			var data routes.UnblockUserData
-
-			if err := c.BodyParser(&data); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "invalid request body",
-				})
-			}
-
-			return routes.UnblockUserHandler(data, c, &server.Db)
-		},
-	)
-	request_group.Post("/unfriend",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
+	relationship_group.Post("/unfriend",
 		func(c *fiber.Ctx) error {
 			var data routes.RemoveFriendData
 
@@ -73,8 +43,8 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 			return routes.RemoveFriendHandler(data, c, &server.Db)
 		},
 	)
-	request_group.Post("/clear_pending",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
+
+	relationship_group.Post("/clear_pending",
 		func(c *fiber.Ctx) error {
 			var data routes.RemovePendingFriendRequestData
 
@@ -87,8 +57,7 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 			return routes.RemovePendingFriendRequestHandler(data, c, &server.Db)
 		},
 	)
-	request_group.Post("/accept",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
+	relationship_group.Post("/response",
 		func(c *fiber.Ctx) error {
 			var data routes.FriendResponseData
 
@@ -98,11 +67,10 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 				})
 			}
 
-			return routes.FriendResponceHandler(data, c, &server.Db)
+			return routes.FriendResponceHandler(data, c, &server.Db, server.Notifications)
 		},
 	)
-	request_group.Get("/all_friends",
-		middleware.OnMSS(m.MODE_OPERATIONAL, m.STATE_RUNNING, m.SUBSTATE_SAFE),
+	relationship_group.Get("/all_friends",
 		func(c *fiber.Ctx) error {
 			return routes.GetAllFriendsHandler(c, &server.Db)
 		},

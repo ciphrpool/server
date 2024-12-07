@@ -17,6 +17,10 @@ func (server *MaintenanceServer) RegisterRoutes() {
 	server.RegisterRelationshipRoutes()
 
 	server.RegisterUserRoutes()
+
+	server.RegisterAuthRoutes()
+
+	server.RegisterNotificationRoutes()
 }
 
 func (server *MaintenanceServer) HelloWorldHandler(c *fiber.Ctx) error {

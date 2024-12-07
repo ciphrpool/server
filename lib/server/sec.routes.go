@@ -12,15 +12,15 @@ func (server *MaintenanceServer) RegisterSecurityRoutes() {
 
 	security_group := server.App.Group("/security")
 
-	server.registerSecurityEngineRoutes(security_group)
+	server.registerSecurityNexusPoolRoutes(security_group)
 	server.registerSecurityApiRoutes(security_group)
 	server.registerSecurityServicesRoutes(security_group)
 }
 
-func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Router) {
-	engines_group := routes.Group("/nexuspool")
+func (server *MaintenanceServer) registerSecurityNexusPoolRoutes(routes fiber.Router) {
+	nexuspools_group := routes.Group("/nexuspool")
 
-	engines_group.Post("/init",
+	nexuspools_group.Post("/init",
 		middleware.OnMode(m.MODE_INIT),
 		middleware.OnState(m.STATE_CONFIGURING),
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_SECURITY),
@@ -29,22 +29,22 @@ func (server *MaintenanceServer) registerSecurityEngineRoutes(routes fiber.Route
 		}),
 		func(c *fiber.Ctx) error {
 			return security.InitNexusPoolSecurityHandler(c, &server.VaultManager, func(result bool) {
-				server.SecurityManager.ChanEnginesTokenApplication <- result
+				server.SecurityManager.ChanNexusPoolsTokenApplication <- result
 			})
 		})
 
-	engines_group.Get("/new", middleware.OnMode(m.MODE_OPERATIONAL),
+	nexuspools_group.Get("/new", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
 		middleware.WithKey("NEXUSPOOL_ADM_KEY", func() (string, error) {
 			return server.VaultManager.GetApiKey("NEXUSPOOL_ADM_KEY")
 		}),
 		func(c *fiber.Ctx) error {
-			return security.RequestEngineConnexionHandler(c, &server.Cache, &server.VaultManager)
+			return security.RequestNexusPoolConnexionHandler(c, &server.Cache, &server.VaultManager)
 		},
 	)
 
-	engines_group.Post("/connect", middleware.OnMode(m.MODE_OPERATIONAL),
+	nexuspools_group.Post("/connect", middleware.OnMode(m.MODE_OPERATIONAL),
 		middleware.OnState(m.STATE_RUNNING),
 		middleware.OnSubstate(m.SUBSTATE_SAFE),
 		middleware.WithKey("NEXUSPOOL_ADM_KEY", func() (string, error) {
@@ -65,7 +65,7 @@ func (server *MaintenanceServer) registerSecurityApiRoutes(routes fiber.Router) 
 		middleware.OnSubstate(m.SUBSTATE_CONFIGURING_INIT),
 		middleware.WithKey("API_INIT_KEY", nil),
 		func(c *fiber.Ctx) error {
-			return security.InitApiSecurityHandler(c, server.VaultManager.Api, func(result bool) {
+			return security.InitApiSecurityHandler(c, &server.VaultManager, func(result bool) {
 				server.SecurityManager.ChanApiTokenApplication <- result
 			})
 		})

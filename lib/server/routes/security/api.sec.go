@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func InitApiSecurityHandler(ctx *fiber.Ctx, vault *v.Vault, on_complete func(bool)) error {
+func InitApiSecurityHandler(ctx *fiber.Ctx, manager *v.VaultManager, on_complete func(bool)) error {
 	var data struct {
 		VaultApiToken string `json:"vault_api_token"`
 	}
@@ -25,7 +25,15 @@ func InitApiSecurityHandler(ctx *fiber.Ctx, vault *v.Vault, on_complete func(boo
 		})
 	}
 
-	vault.SetToken(data.VaultApiToken)
+	manager.Api.SetToken(data.VaultApiToken)
+
+	if err := manager.LoadApiKeys("SERVICES_INIT_KEY", "NEXUSPOOL_INIT_KEY", "NEXUSPOOL_ADM_KEY", "JWT_KEY"); err != nil {
+		slog.Error("api could not be loaded", "error", err)
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "api could not be loaded",
+		})
+	}
+
 	on_complete(true)
 	slog.Info("Successfully load vault api token")
 

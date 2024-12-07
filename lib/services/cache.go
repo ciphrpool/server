@@ -1,8 +1,6 @@
 package services
 
 import (
-	"backend/lib"
-	"backend/lib/server/middleware"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,10 +8,13 @@ import (
 	"os"
 	"time"
 
+	basepool "github.com/ciphrpool/base-pool/gen"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/redis/go-redis/v9"
 )
+
+const WAITING_ROOM_TTL = 10 * time.Minute
 
 type Cache struct {
 	Db *redis.Client
@@ -39,11 +40,16 @@ func (cache *Cache) Connect(password string) error {
 		return fmt.Errorf("failed to connect to Dragonfly: %w", err)
 	}
 	slog.Info("Cache connection succeeded")
-	cache.StartPeriodicCleanups()
 	return nil
 }
 
-func (cache *Cache) AddEngine(nexuspool lib.NexusPool) error {
+type NexusPool struct {
+	Id    string `json:"id"`
+	Alive bool   `json:"alive"`
+	Url   string `json:"url"`
+}
+
+func (cache *Cache) AddNexusPool(nexuspool NexusPool) error {
 	if nexuspool.Id == "" {
 		nexuspool.Id = uuid.New().String()
 	}
@@ -60,8 +66,8 @@ func (cache *Cache) AddEngine(nexuspool lib.NexusPool) error {
 	return nil
 }
 
-func (cache *Cache) GetEngine(id string) (lib.NexusPool, error) {
-	var nexuspool lib.NexusPool
+func (cache *Cache) GetNexusPool(id string) (NexusPool, error) {
+	var nexuspool NexusPool
 	ctx := context.Background()
 	nexuspool_json, err := cache.Db.Get(ctx, fmt.Sprintf("nexuspool:%s", id)).Result()
 	if err == redis.Nil {
@@ -75,7 +81,46 @@ func (cache *Cache) GetEngine(id string) (lib.NexusPool, error) {
 	return nexuspool, nil
 }
 
-func (cache *Cache) UpdateEngine(nexuspool lib.NexusPool) error {
+func (cache *Cache) GetAliveNexusPool() (NexusPool, error) {
+	var nexuspool NexusPool
+	ctx := context.Background()
+
+	// Scan for all nexuspool keys
+	var cursor uint64 = 0
+	for {
+		keys, newCursor, err := cache.Db.Scan(ctx, cursor, "nexuspool:*", 100).Result()
+		if err != nil {
+			return nexuspool, fmt.Errorf("failed to scan nexuspools: %w", err)
+		}
+
+		// Check each pool
+		for _, key := range keys {
+			nexuspool_json, err := cache.Db.Get(ctx, key).Result()
+			if err != nil {
+				continue // Skip if we can't get this pool
+			}
+
+			if err := json.Unmarshal([]byte(nexuspool_json), &nexuspool); err != nil {
+				continue // Skip if we can't unmarshal
+			}
+
+			// Return the first alive pool we find
+			if nexuspool.Alive {
+				return nexuspool, nil
+			}
+		}
+
+		// Exit if we've scanned all keys
+		if newCursor == 0 {
+			break
+		}
+		cursor = newCursor
+	}
+
+	return nexuspool, fmt.Errorf("no alive nexuspool found")
+}
+
+func (cache *Cache) UpdateNexusPool(nexuspool NexusPool) error {
 	if nexuspool.Id == "" {
 		return fmt.Errorf("nexuspool ID cannot be empty")
 	}
@@ -90,12 +135,12 @@ func (cache *Cache) UpdateEngine(nexuspool lib.NexusPool) error {
 	}
 	return nil
 }
-func (cache *Cache) SearchAliveEngine() (lib.NexusPool, error) {
+func (cache *Cache) SearchAliveNexusPool() (NexusPool, error) {
 	ctx := context.Background()
 
 	// Use SCAN to iterate through all keys
 	var cursor uint64
-	var nexuspool lib.NexusPool
+	var nexuspool NexusPool
 
 	for {
 		var keys []string
@@ -129,10 +174,11 @@ func (cache *Cache) SearchAliveEngine() (lib.NexusPool, error) {
 	return nexuspool, fmt.Errorf("no alive nexuspool found")
 }
 
-func (cache *Cache) UpsertArenaSession(client_ip string) (string, error) {
+func (cache *Cache) UpsertArenaUnregisteredSession(client_ip string) (string, error) {
 	ctx := context.Background()
 
-	session_key := fmt.Sprintf("arena:session:ip:%s", client_ip)
+	session_key := fmt.Sprintf("arena:session:unregistered:%s", client_ip)
+	slog.Debug("Areana Session key", "session_key", session_key)
 	existing_session_id, err := cache.Db.Get(ctx, session_key).Result()
 	if err == nil {
 		return existing_session_id, nil
@@ -143,23 +189,7 @@ func (cache *Cache) UpsertArenaSession(client_ip string) (string, error) {
 
 	session_id := uuid.New().String()
 
-	session := lib.ArenaSession{
-		ConnexionExpirationDate: time.Now().Add(15 * time.Minute),
-		UserID:                  "",
-		Alive:                   true,
-		Started:                 false,
-		UserIP:                  client_ip,
-	}
-
-	session_json, err := json.Marshal(session)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal arena session: %w", err)
-	}
-	err = cache.Db.Set(ctx, fmt.Sprintf("arena:session:%s", session_id), session_json, 0).Err()
-	if err != nil {
-		return "", fmt.Errorf("failed to create arena session: %w", err)
-	}
-	err = cache.Db.Set(ctx, fmt.Sprintf("arena:session:ip:%s", session_id), session_id, 0).Err()
+	err = cache.Db.Set(ctx, session_key, session_id, WAITING_ROOM_TTL).Err()
 	if err != nil {
 		return "", fmt.Errorf("failed to create arena session: %w", err)
 	}
@@ -167,87 +197,75 @@ func (cache *Cache) UpsertArenaSession(client_ip string) (string, error) {
 	return session_id, nil
 }
 
-func (cache *Cache) cleanupExpiredArenaSessions() error {
-	ctx := context.Background()
-	var cursor uint64
-
-	for {
-		var keys []string
-		var err error
-		keys, cursor, err = cache.Db.Scan(ctx, cursor, "arena:session:*", 100).Result()
-
-		if err != nil {
-			return fmt.Errorf("failed to scan keys: %w", err)
-		}
-
-		for _, key := range keys {
-			session_json, err := cache.Db.Get(ctx, key).Result()
-			if err != nil {
-				continue // Skip this key if there's an error
-			}
-
-			var session lib.ArenaSession
-			if err := json.Unmarshal([]byte(session_json), &session); err != nil {
-				continue // Skip this key if unmarshaling fails
-			}
-
-			if !session.Alive {
-				if err := cache.Db.Del(ctx, key).Err(); err != nil {
-					slog.Error("failed to delete expired session", "key", key, "error", err)
-				}
-				if err := cache.Db.Del(ctx, fmt.Sprintf("arena:session:ip:%s", session.UserIP)).Err(); err != nil {
-					slog.Error("failed to delete expired session related ip", "key", key, "error", err)
-				}
-			}
-		}
-
-		if cursor == 0 {
-			break
-		}
-	}
-
-	return nil
-}
-
-func (cache *Cache) StartPeriodicCleanups() {
-	// Clean ups arena session
-	arena_cleanups_interval := 1 * time.Hour
-	go func() {
-		ticker := time.NewTicker(arena_cleanups_interval)
-		defer ticker.Stop()
-
-		for {
-			<-ticker.C
-			if err := cache.cleanupExpiredArenaSessions(); err != nil {
-				slog.Error("failed to cleanup expired sessions", "error", err)
-			}
-		}
-	}()
-}
-
 type WaitingRoomData struct {
 	Player1ID pgtype.UUID `json:"player_1"`
 	Player2ID pgtype.UUID `json:"player_2"`
 }
 
-func (cache *Cache) UpsertDuelWaitingRoom(waiting_room WaitingRoomData) (string, error) {
+func (cache *Cache) UpsertDuelWaitingRoom(waiting_room WaitingRoomData) (string, bool, error) {
 	ctx := context.Background()
 
-	waiting_room_key := fmt.Sprintf("duel:waiting_room:id:%s-%s", middleware.UUIDToString(waiting_room.Player1ID), middleware.UUIDToString(waiting_room.Player2ID))
+	waiting_room_key := fmt.Sprintf("duel:waiting_room:id:%s-%s", UUIDToString(waiting_room.Player1ID), UUIDToString(waiting_room.Player2ID))
 	waiting_room_id, err := cache.Db.Get(ctx, waiting_room_key).Result()
 	if err == nil {
-		return waiting_room_id, nil
+		return waiting_room_id, false, nil
 	} else if err != redis.Nil {
 		// An error occurred other than key not existing
-		return "", fmt.Errorf("failed to check existing waiting_room: %w", err)
+		return "", true, fmt.Errorf("failed to check existing waiting_room: %w", err)
 	}
 
 	waiting_room_id = uuid.New().String()
 
-	err = cache.Db.Set(ctx, waiting_room_key, waiting_room_id, 10).Err()
+	err = cache.Db.Set(ctx, waiting_room_key, waiting_room_id, WAITING_ROOM_TTL).Err()
 	if err != nil {
-		return "", fmt.Errorf("failed to create arena session: %w", err)
+		return "", true, fmt.Errorf("failed to create arena session: %w", err)
 	}
 
-	return waiting_room_id, nil
+	return waiting_room_id, true, nil
+}
+
+func (cache *Cache) DeleteDuelWaitingRoom(waiting_room WaitingRoomData) error {
+	ctx := context.Background()
+
+	waiting_room_key := fmt.Sprintf("duel:waiting_room:id:%s-%s", UUIDToString(waiting_room.Player1ID), UUIDToString(waiting_room.Player2ID))
+	_, err := cache.Db.Del(ctx, waiting_room_key).Result()
+	if err == nil {
+		return nil
+	} else if err != redis.Nil {
+		// An error occurred other than key not existing
+		return fmt.Errorf("failed to check existing waiting_room: %w", err)
+	}
+	return nil
+}
+
+type DuelPlayerSummaryData struct {
+	PID      pgtype.UUID `json:"pid"`
+	Elo      uint        `json:"elo"`
+	Tag      string      `json:"tag"`
+	Username string      `json:"username"`
+}
+
+type DuelSessionData struct {
+	P1       DuelPlayerSummaryData `json:"p1"`
+	P2       DuelPlayerSummaryData `json:"p2"`
+	DuelType basepool.DuelType
+}
+
+func (cache *Cache) CreateDuelSession(session_data *DuelSessionData) (string, error) {
+	ctx := context.Background()
+
+	duel_session_id := uuid.New().String()
+
+	duel_session_key := fmt.Sprintf("duel:session:%s", duel_session_id)
+
+	session_data_json, err := json.Marshal(session_data)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal duel session data: %w", err)
+	}
+	err = cache.Db.Set(ctx, duel_session_key, session_data_json, 1*time.Hour).Err()
+	if err != nil {
+		return "", fmt.Errorf("failed to create duel session cache data: %w", err)
+	}
+
+	return duel_session_id, nil
 }

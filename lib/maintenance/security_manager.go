@@ -6,8 +6,8 @@ import (
 )
 
 type SecurityManager struct {
-	enginesTokenApplication     bool
-	ChanEnginesTokenApplication chan bool
+	nexuspoolsTokenApplication     bool
+	ChanNexusPoolsTokenApplication chan bool
 
 	apiTokenApplication     bool
 	ChanApiTokenApplication chan bool
@@ -19,8 +19,8 @@ type SecurityManager struct {
 func NewSecurityManager() (SecurityManager, error) {
 
 	manager := SecurityManager{
-		enginesTokenApplication:     false,
-		ChanEnginesTokenApplication: make(chan bool, 8),
+		nexuspoolsTokenApplication:     false,
+		ChanNexusPoolsTokenApplication: make(chan bool, 8),
 
 		apiTokenApplication:     false,
 		ChanApiTokenApplication: make(chan bool, 8),
@@ -61,15 +61,15 @@ func (manager *SecurityManager) Start(state_machine *StateMachine) {
 	go func() {
 		for {
 			select {
-			case is_applied := <-manager.ChanEnginesTokenApplication:
+			case is_applied := <-manager.ChanNexusPoolsTokenApplication:
 				if is_applied {
-					slog.Debug("SecurityManager : The engines token is applied")
-					manager.enginesTokenApplication = true
+					slog.Debug("SecurityManager : The nexuspools token is applied")
+					manager.nexuspoolsTokenApplication = true
 				}
 
 			}
 
-			if manager.enginesTokenApplication {
+			if manager.nexuspoolsTokenApplication {
 				if err := state_machine.To(MODE_OPERATIONAL, STATE_RUNNING, SUBSTATE_SAFE); err != nil {
 					break
 				}

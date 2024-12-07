@@ -1,9 +1,12 @@
 package routes
 
 import (
+	"backend/lib/notifications"
 	"backend/lib/server/middleware"
 	"backend/lib/services"
 	"context"
+	"fmt"
+	"log/slog"
 	"time"
 
 	basepool "github.com/ciphrpool/base-pool/gen"
@@ -18,99 +21,29 @@ func FriendRequestHandler(data FriendRequestData, ctx *fiber.Ctx, db *services.D
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
-	friend_id, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
+	friend, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
-	err = queries.CreateUserRelationship(query_ctx, basepool.CreateUserRelationshipParams{
-		User1ID:            user_ctx.UserID,
-		User2ID:            friend_id,
-		RelationshipType:   basepool.RelationshipFriend,
-		RelationshipStatus: basepool.RelationshipStatusPending,
+
+	err = queries.CreateFriendRequest(query_ctx, basepool.CreateFriendRequestParams{
+		User1ID: user_id,
+		User2ID: friend.ID,
 	})
+
 	if err != nil {
+		slog.Debug("CreateUserRelationship failed", "error", err)
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "cannot create this relationship",
-		})
-	}
-
-	return ctx.SendStatus(fiber.StatusAccepted)
-}
-
-type BlockUserData struct {
-	BlockedTag string `json:"blocked_tag"`
-}
-
-func BlockUserHandler(data BlockUserData, ctx *fiber.Ctx, db *services.Database) error {
-	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	queries := basepool.New(db.Pool)
-	blocked_id, err := queries.GetUserIDByTag(query_ctx, data.BlockedTag)
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "unknown user",
-		})
-	}
-
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "unknown user",
-		})
-	}
-	err = queries.CreateUserRelationship(query_ctx, basepool.CreateUserRelationshipParams{
-		User1ID:            user_ctx.UserID,
-		User2ID:            blocked_id,
-		RelationshipType:   basepool.RelationshipBlocked,
-		RelationshipStatus: basepool.RelationshipStatusAccepted,
-	})
-	if err != nil {
-		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "cannot block this user",
-		})
-	}
-
-	return ctx.SendStatus(fiber.StatusAccepted)
-}
-
-type UnblockUserData struct {
-	BlockedTag string `json:"blocked_tag"`
-}
-
-func UnblockUserHandler(data UnblockUserData, ctx *fiber.Ctx, db *services.Database) error {
-	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	queries := basepool.New(db.Pool)
-	blocked_id, err := queries.GetUserIDByTag(query_ctx, data.BlockedTag)
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "unknown user",
-		})
-	}
-
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "unknown user",
-		})
-	}
-	err = queries.DelUserRelationhip(query_ctx, basepool.DelUserRelationhipParams{
-		User1ID:          user_ctx.UserID,
-		User2ID:          blocked_id,
-		RelationshipType: basepool.RelationshipBlocked,
-	})
-	if err != nil {
-		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "cannot unblock this user",
 		})
 	}
 
@@ -125,24 +58,23 @@ func RemoveFriendHandler(data RemoveFriendData, ctx *fiber.Ctx, db *services.Dat
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
-	friend_id, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
+	friend, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	err = queries.DelUserRelationhip(query_ctx, basepool.DelUserRelationhipParams{
-		User1ID:          user_ctx.UserID,
-		User2ID:          friend_id,
-		RelationshipType: basepool.RelationshipFriend,
+	_, err = queries.RemoveFriendship(query_ctx, basepool.RemoveFriendshipParams{
+		User1ID: user_id,
+		User2ID: friend.ID,
 	})
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -161,23 +93,23 @@ func RemovePendingFriendRequestHandler(data RemovePendingFriendRequestData, ctx 
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
-	friend_id, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
+	friend, err := queries.GetUserIDByTag(query_ctx, data.FriendTag)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	err = queries.DelPendingRequest(query_ctx, basepool.DelPendingRequestParams{
-		User1ID: user_ctx.UserID,
-		User2ID: friend_id,
+	_, err = queries.RemovePendingRequest(query_ctx, basepool.RemovePendingRequestParams{
+		User1ID: user_id,
+		User2ID: friend.ID,
 	})
 
 	if err != nil {
@@ -194,34 +126,46 @@ type FriendResponseData struct {
 	Response     bool   `json:"response"`
 }
 
-func FriendResponceHandler(data FriendResponseData, ctx *fiber.Ctx, db *services.Database) error {
+func FriendResponceHandler(data FriendResponseData, ctx *fiber.Ctx, db *services.Database, notify *notifications.NotificationService) error {
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
-	requester_id, err := queries.GetUserIDByTag(query_ctx, data.RequesterTag)
+	requester, err := queries.GetUserIDByTag(query_ctx, data.RequesterTag)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "cannot find this user",
 		})
 	}
 
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
-	var status basepool.RelationshipStatus
+
 	if data.Response {
-		status = basepool.RelationshipStatusAccepted
+		_, err = queries.AcceptFriendRequest(query_ctx, basepool.AcceptFriendRequestParams{
+			User1ID: requester.ID,
+			User2ID: user_id,
+		})
+		notify.Send(
+			ctx.Context(),
+			notifications.TypeMessage,
+			notifications.PriorityMedium,
+			requester.ID,
+			fiber.Map{
+				"type": "relationship",
+				"msg":  fmt.Sprintf("%s#%s has accepted your friend request !", requester.Username, requester.Tag),
+			},
+			fiber.Map{},
+		)
 	} else {
-		status = basepool.RelationshipStatusRejected
+		_, err = queries.RejectFriendRequest(query_ctx, basepool.RejectFriendRequestParams{
+			User1ID: requester.ID,
+			User2ID: user_id,
+		})
 	}
-	err = queries.UpdateUserRelationshipStatus(query_ctx, basepool.UpdateUserRelationshipStatusParams{
-		User1ID:            requester_id,
-		User2ID:            user_ctx.UserID,
-		RelationshipStatus: status,
-	})
 
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -237,14 +181,14 @@ func GetAllFriendsHandler(ctx *fiber.Ctx, db *services.Database) error {
 	defer cancel()
 	queries := basepool.New(db.Pool)
 
-	user_ctx, ok := ctx.Locals(middleware.USER_CONTEXT_KEY).(middleware.UserContext)
-	if !ok {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+	user_id, err := middleware.GetUserID(ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "unknown user",
 		})
 	}
 
-	friends, err := queries.GetUserFriends(query_ctx, user_ctx.UserID)
+	friends, err := queries.GetAllFriends(query_ctx, user_id)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "unknown user",

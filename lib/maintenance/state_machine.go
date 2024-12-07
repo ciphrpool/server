@@ -22,9 +22,9 @@ const (
 )
 
 const (
-	SUBSTATE_CONFIGURING_INIT SubState = iota
-	SUBSTATE_CONFIGURING_SERVICES
-	SUBSTATE_CONFIGURING_SECURITY
+	SUBSTATE_CONFIGURING_INIT     SubState = iota // Configure Vault Tokens and retrieve keys
+	SUBSTATE_CONFIGURING_SERVICES                 // Configure all services : Db, Cache, Notification, Authentication
+	SUBSTATE_CONFIGURING_SECURITY                 // Connect to NexusPool
 	SUBSTATE_SAFE
 	SUBSTATE_UNSAFE
 	SUBSTATE_FAILED

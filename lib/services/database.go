@@ -7,14 +7,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 )
-
-type Service interface {
-	Health() bool
-}
 
 type Database struct {
 	Pool *pgxpool.Pool
@@ -27,8 +25,8 @@ func DefaultDatabase() Database {
 }
 
 func (db *Database) Connect(password string) error {
-	address := os.Getenv("CACHE_ADDRESS")
-	uri := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", "MCS", password, address, "basepool")
+	address := os.Getenv("DATABASE_ADDRESS")
+	uri := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", "mcs", password, address, "basepool")
 	config, err := pgxpool.ParseConfig(uri)
 	if err != nil {
 		return fmt.Errorf("failed to connect to PostgresDB: %w", err)
@@ -39,7 +37,7 @@ func (db *Database) Connect(password string) error {
 	config.MaxConnIdleTime = 30 * time.Minute
 	config.HealthCheckPeriod = 1 * time.Minute
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
@@ -55,6 +53,29 @@ func (db *Database) Connect(password string) error {
 	db.Pool = pool
 	slog.Info("Db connection succeeded")
 	return nil
+}
+
+func StringToUUID(s string) (pgtype.UUID, error) {
+	var pgUUID pgtype.UUID
+
+	// Parse the string into a UUID
+	parsedUUID, err := uuid.Parse(s)
+	if err != nil {
+		return pgUUID, err
+	}
+
+	// Convert to pgtype.UUID
+	pgUUID.Bytes = parsedUUID
+	pgUUID.Valid = true
+
+	return pgUUID, nil
+}
+
+func UUIDToString(id pgtype.UUID) string {
+	if !id.Valid {
+		return ""
+	}
+	return uuid.UUID(id.Bytes).String()
 }
 
 func (s *Database) Health() bool {

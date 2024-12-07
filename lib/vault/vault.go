@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	v "github.com/hashicorp/vault/api"
@@ -14,6 +15,9 @@ type VaultManager struct {
 	NexusPool *Vault
 	Api       *Vault
 	Services  *Vault
+
+	OpenNexusAESKey map[string]string
+	OpenAPIKey      map[string]string
 }
 
 func NewVaultManager() (VaultManager, error) {
@@ -36,16 +40,21 @@ func NewVaultManager() (VaultManager, error) {
 		return VaultManager{}, fmt.Errorf("failed to create Vault client: %w", err)
 	}
 
+	var open_nexus_aes_key = make(map[string]string, 2)
+	var open_api_key = make(map[string]string, 8)
+
 	vault_manager := VaultManager{
-		NexusPool: nexuspool,
-		Api:       api,
-		Services:  services,
+		NexusPool:       nexuspool,
+		Api:             api,
+		Services:        services,
+		OpenNexusAESKey: open_nexus_aes_key,
+		OpenAPIKey:      open_api_key,
 	}
 	return vault_manager, nil
 }
 
 func (manager *VaultManager) Health() bool {
-	engine_health, err := manager.NexusPool.Sys().Health()
+	nexuspool_health, err := manager.NexusPool.Sys().Health()
 	if err != nil {
 		return false
 	}
@@ -59,7 +68,7 @@ func (manager *VaultManager) Health() bool {
 	}
 
 	return (err == nil) &&
-		(engine_health.Initialized && engine_health.Sealed) &&
+		(nexuspool_health.Initialized && nexuspool_health.Sealed) &&
 		(api_health.Initialized && api_health.Sealed) &&
 		(services_health.Initialized && services_health.Sealed)
 }
@@ -75,6 +84,7 @@ func (manager *VaultManager) StoreNexusPoolAESKey(id string, key string) error {
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
 	}
+	manager.OpenNexusAESKey[id] = key
 
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
@@ -140,7 +150,20 @@ func (manager *VaultManager) GetDbPwd() (string, error) {
 	return key, nil
 }
 
-func (manager *VaultManager) GetApiKey(name string) (string, error) {
+func (manager *VaultManager) LoadApiKeys(names ...string) error {
+
+	for _, name := range names {
+		key, err := manager.getApiKey(name)
+		if err != nil {
+			return fmt.Errorf("failed to load API key for '%s': %w", name, err)
+		}
+		manager.OpenAPIKey[name] = key
+	}
+	slog.Info("All api keys were loaded")
+	return nil
+}
+
+func (manager *VaultManager) getApiKey(name string) (string, error) {
 	path := fmt.Sprintf("api/data/%s", name)
 	secret, err := manager.Api.Logical().Read(path)
 	if err != nil {
@@ -157,6 +180,14 @@ func (manager *VaultManager) GetApiKey(name string) (string, error) {
 	key, ok := data["value"].(string)
 	if !ok {
 		return "", fmt.Errorf("key not found or invalid in secret data at path: %s", path)
+	}
+	return key, nil
+}
+
+func (manager *VaultManager) GetApiKey(name string) (string, error) {
+	key, ok := manager.OpenAPIKey[name]
+	if !ok {
+		return "", fmt.Errorf("unknown api key")
 	}
 	return key, nil
 }
