@@ -24,7 +24,10 @@ func InitiateOAuthHandler(provider basepool.AuthType, c *fiber.Ctx, auth *authen
 		})
 	}
 
-	return c.Redirect(auth_url)
+	// return c.Redirect(auth_url)
+	return c.JSON(fiber.Map{
+		"auth_url": auth_url,
+	})
 }
 
 type OAuthCallbackParams struct {
@@ -72,8 +75,24 @@ func OAuthCallbackHandler(
 		})
 	}
 
-	c.Set("X-CSRF-Token", token_pair_with_user_info.TokenPair.CSRFToken)
-	c.Set("X-Refresh-Token", token_pair_with_user_info.TokenPair.RefreshToken)
+	// Set Refresh Token as HTTP-Only secure cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "REFRESH-TOKEN",
+		Value:    token_pair_with_user_info.TokenPair.RefreshToken,
+		Secure:   true,
+		HTTPOnly: true,
+		SameSite: "Strict",
+		Path:     "/",
+	})
+
+	// Set CSRF Token as regular cookie (accessible by JavaScript)
+	c.Cookie(&fiber.Cookie{
+		Name:     "CSRF-TOKEN",
+		Value:    token_pair_with_user_info.TokenPair.CSRFToken,
+		Secure:   true,
+		SameSite: "Strict",
+		Path:     "/",
+	})
 
 	// Return access token and expiry
 	return c.JSON(fiber.Map{
@@ -82,21 +101,32 @@ func OAuthCallbackHandler(
 	})
 }
 func RefreshAccessTokenHandler(c *fiber.Ctx, auth *authentication.AuthService, cache *services.Cache) error {
+	csrf_token_cookie := c.Cookies("CSRF-TOKEN")
+	if len(csrf_token_cookie) == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": middleware.ErrInvalidCSRF.Error(),
+		})
+	}
 	csrf_token := c.Get("X-CSRF-Token")
 	if csrf_token == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": middleware.ErrInvalidCSRF.Error(),
 		})
 	}
-
-	refreshToken := c.Get("X-Refresh-Token")
-	if refreshToken == "" {
+	if csrf_token_cookie != csrf_token {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "No refresh token provided",
+			"error": middleware.ErrInvalidCSRF.Error(),
 		})
 	}
 
-	access_token, expiresAt, err := auth.RefreshUserAccessToken(c.Context(), refreshToken, csrf_token, cache)
+	refresh_token_cookie := c.Cookies("REFRESH-TOKEN")
+	if len(refresh_token_cookie) == 0 {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "no refresh token",
+		})
+	}
+
+	access_token, expiresAt, err := auth.RefreshUserAccessToken(c.Context(), refresh_token_cookie, csrf_token, cache)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid refresh token",
@@ -110,14 +140,14 @@ func RefreshAccessTokenHandler(c *fiber.Ctx, auth *authentication.AuthService, c
 }
 
 func RefreshSessionHandler(c *fiber.Ctx, auth *authentication.AuthService, cache *services.Cache, sessions *session.Store) error {
-	refreshToken := c.Get("X-Refresh-Token")
-	if refreshToken == "" {
+	refresh_token_cookie := c.Cookies("REFRESH-TOKEN")
+	if len(refresh_token_cookie) == 0 {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "No refresh token provided",
+			"error": "no refresh token",
 		})
 	}
 	// Get claims from refresh token
-	claims, err := auth.ValidateUserRefreshToken(c.Context(), refreshToken, cache)
+	claims, err := auth.ValidateUserRefreshToken(c.Context(), refresh_token_cookie, cache)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to create session",
@@ -136,26 +166,41 @@ func RefreshSessionHandler(c *fiber.Ctx, auth *authentication.AuthService, cache
 
 func RefreshAllTokenHandler(c *fiber.Ctx, auth *authentication.AuthService, cache *services.Cache) error {
 
-	refreshToken := c.Get("X-Refresh-Token")
-	if refreshToken == "" {
+	refresh_token_cookie := c.Cookies("REFRESH-TOKEN")
+	if len(refresh_token_cookie) == 0 {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "No refresh token provided",
+			"error": "no refresh token",
 		})
 	}
 
-	token_pair, err := auth.RefreshUserTokens(c.Context(), refreshToken, cache)
+	token_pair, err := auth.RefreshUserTokens(c.Context(), refresh_token_cookie, cache)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid refresh token",
 		})
 	}
 
-	c.Set("X-CSRF-Token", token_pair.CSRFToken)
+	// Set Refresh Token as HTTP-Only secure cookie
+	c.Cookie(&fiber.Cookie{
+		Name:     "REFRESH-TOKEN",
+		Value:    token_pair.RefreshToken,
+		Secure:   true,
+		HTTPOnly: true,
+		SameSite: "Strict",
+		Path:     "/",
+	})
 
+	// Set CSRF Token as regular cookie (accessible by JavaScript)
+	c.Cookie(&fiber.Cookie{
+		Name:     "CSRF-TOKEN",
+		Value:    token_pair.CSRFToken,
+		Secure:   true,
+		SameSite: "Strict",
+		Path:     "/",
+	})
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
-		"access_token":  token_pair.AccessToken,
-		"refresh_token": token_pair.RefreshToken,
-		"expires_at":    token_pair.ExpiresAt,
+		"access_token": token_pair.AccessToken,
+		"expires_at":   token_pair.ExpiresAt,
 	})
 }
 

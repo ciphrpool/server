@@ -47,6 +47,7 @@ const (
 type Notification struct {
 	ID        string               `json:"id"`
 	Type      NotificationType     `json:"type"`
+	Key       string               `json:"key"`
 	UserID    pgtype.UUID          `json:"user_id"`
 	Content   fiber.Map            `json:"content"`
 	CreatedAt time.Time            `json:"created_at"`
@@ -92,9 +93,9 @@ func (c *Config) Validate() error {
 // clientRegistry manages active SSE connections
 type clientRegistry struct {
 	mu         sync.RWMutex
-	clients    map[pgtype.UUID]chan *Notification
-	subConns   map[pgtype.UUID]*redis.PubSub
-	closeChans map[pgtype.UUID]chan struct{}
+	clients    map[string]chan *Notification
+	subConns   map[string]*redis.PubSub
+	closeChans map[string]chan struct{}
 }
 
 // NotificationService represents the notification service
@@ -121,9 +122,9 @@ func NewNotificationService(cfg *Config) (*NotificationService, error) {
 		jobs:     make(chan *Notification, cfg.WorkerQueueSize),
 		shutdown: make(chan struct{}),
 		registry: &clientRegistry{
-			clients:    make(map[pgtype.UUID]chan *Notification),
-			subConns:   make(map[pgtype.UUID]*redis.PubSub),
-			closeChans: make(map[pgtype.UUID]chan struct{}),
+			clients:    make(map[string]chan *Notification),
+			subConns:   make(map[string]*redis.PubSub),
+			closeChans: make(map[string]chan struct{}),
 		},
 	}
 	// Initialize notification pool
@@ -161,6 +162,7 @@ func (s *NotificationService) PutNotification(n *Notification) {
 func (s *NotificationService) Send(
 	ctx context.Context,
 	t NotificationType,
+	key string,
 	priority NotificationPriority,
 	user_id pgtype.UUID,
 	content fiber.Map,
@@ -172,6 +174,7 @@ func (s *NotificationService) Send(
 	pooledNotification.ID = uuid.New().String()
 	pooledNotification.UserID = user_id
 	pooledNotification.Type = t
+	pooledNotification.Key = key
 	pooledNotification.Priority = priority
 	pooledNotification.Content = content
 	pooledNotification.Metadata = metadata
@@ -189,8 +192,8 @@ func (s *NotificationService) Send(
 func (s *NotificationService) processNotification(ctx context.Context, n *Notification, cache *services.Cache) error {
 	defer s.PutNotification(n) // Return notification to pool after processing
 
-	if s.hasActiveConnection(ctx, n.UserID, cache) {
-		return s.deliverNotification(ctx, n, cache)
+	if sessionId, err := s.hasActiveConnection(ctx, n.UserID, cache); err == nil {
+		return s.deliverNotification(ctx, sessionId, n, cache)
 	}
 	if n.Type != TypeRedirect {
 		return s.storeNotification(ctx, n, cache)
@@ -201,8 +204,9 @@ func (s *NotificationService) processNotification(ctx context.Context, n *Notifi
 }
 
 // deliverNotification handles delivering a notification via Redis pub/sub
-func (s *NotificationService) deliverNotification(ctx context.Context, n *Notification, cache *services.Cache) error {
-	channel := fmt.Sprintf("notifications:channel:user:%s", services.UUIDToString(n.UserID))
+func (s *NotificationService) deliverNotification(ctx context.Context, sessionId string, n *Notification, cache *services.Cache) error {
+	// slog.Debug("Delivering notification in redis pubsub")
+	channel := fmt.Sprintf("notifications:channel:session:%s", sessionId)
 
 	// Get buffer from pool
 	bufPtr := s.bufPool.Get().(*[]byte)
@@ -231,79 +235,88 @@ func (s *NotificationService) Start(ctx context.Context, cache *services.Cache) 
 }
 
 // registerClient adds a new SSE client connection
-func (s *NotificationService) registerClient(ctx context.Context, userID pgtype.UUID, notifications chan *Notification, cache *services.Cache) error {
+func (s *NotificationService) registerClient(ctx context.Context, userID pgtype.UUID, sessionId string, notifications chan *Notification, cache *services.Cache) error {
 	s.registry.mu.Lock()
 	defer s.registry.mu.Unlock()
 
 	// Check if client already exists
-	if _, exists := s.registry.clients[userID]; exists {
-		return fmt.Errorf("client already registered: %s", services.UUIDToString(userID))
+	currentSessionId, err := s.hasActiveConnection(ctx, userID, cache)
+	if err == nil && currentSessionId != sessionId {
+		return fmt.Errorf("another notification is running")
+	}
+	if _, exists := s.registry.clients[sessionId]; exists {
+		return nil
 	}
 
 	// Subscribe to Redis channel
-	channel := fmt.Sprintf("notifications:channel:user:%s", services.UUIDToString(userID))
+	channel := fmt.Sprintf("notifications:channel:session:%s", sessionId)
 	pubsub := cache.Db.Subscribe(ctx, channel)
 	closeChan := make(chan struct{})
 
 	// Verify subscription
-	_, err := pubsub.Receive(ctx)
+	_, err = pubsub.Receive(ctx)
 	if err != nil {
 		pubsub.Close()
 		return fmt.Errorf("failed to subscribe to Redis channel: %w", err)
 	}
 
 	// Store client channel and subscription
-	s.registry.clients[userID] = notifications
-	s.registry.subConns[userID] = pubsub
-	s.registry.closeChans[userID] = closeChan
+	s.registry.clients[sessionId] = notifications
+	s.registry.subConns[sessionId] = pubsub
+	s.registry.closeChans[sessionId] = closeChan
 
 	// Start message relay goroutine
-	go s.relayMessages(ctx, userID, pubsub.Channel(), notifications, cache)
+	go s.relayMessages(ctx, userID, sessionId, pubsub.Channel(), notifications, cache)
 
 	// Set connection status in Redis
-	err = cache.Db.Set(ctx, fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID)), true, 15*time.Minute).Err()
+	err = cache.Db.Set(ctx, fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID)), sessionId, 15*time.Minute).Err()
 	if err != nil {
 		slog.Error("Notifications : failed to set connection status", "error", err, "user_id", services.UUIDToString(userID))
 	}
 
-	slog.Info("Notifications : client registered to a notification session", "user_id", services.UUIDToString(userID))
+	slog.Info("Notifications : client registered to a notification session", "user_id", services.UUIDToString(userID), "session", sessionId)
 	return nil
 }
 
 // unregisterClient removes a client connection
-func (s *NotificationService) unregisterClient(ctx context.Context, userID pgtype.UUID, cache *services.Cache) {
+func (s *NotificationService) unregisterClient(ctx context.Context, userID pgtype.UUID, sessionId string, cache *services.Cache) {
 	s.registry.mu.Lock()
 	defer s.registry.mu.Unlock()
 
 	// Close Redis subscription if exists
-	if pubsub, exists := s.registry.subConns[userID]; exists {
+	if pubsub, exists := s.registry.subConns[sessionId]; exists {
 		if err := pubsub.Close(); err != nil {
 			slog.Error("Notifications : failed to close pubsub connection",
 				"error", err,
 				"user_id", services.UUIDToString(userID))
 		}
-		delete(s.registry.subConns, userID)
+		delete(s.registry.subConns, sessionId)
 	}
 
 	// Remove client channel
-	delete(s.registry.clients, userID)
-	delete(s.registry.closeChans, userID)
+	delete(s.registry.clients, sessionId)
+	delete(s.registry.closeChans, sessionId)
 
 	// Remove connection status from Redis
-	if s.hasActiveConnection(ctx, userID, cache) {
+	if currentSessionId, err := s.hasActiveConnection(ctx, userID, cache); err == nil && currentSessionId == sessionId {
 		err := cache.Db.Del(ctx, fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID))).Err()
 		if err != nil {
 			slog.Error("Notifications : failed to remove connection status",
 				"error", err,
-				"user_id", services.UUIDToString(userID))
+				"user_id", services.UUIDToString(userID),
+				"session", sessionId)
 		}
 	}
 
-	slog.Info("Notifications : client has been unregistered from its notification session", "user_id", services.UUIDToString(userID))
+	slog.Info(
+		"Notifications : client has been unregistered from its notification session",
+		"user_id", services.UUIDToString(userID),
+		"session", sessionId,
+	)
 }
 
 // relayMessages handles message relay from Redis to SSE client
-func (s *NotificationService) relayMessages(ctx context.Context, userID pgtype.UUID, redisMessages <-chan *redis.Message, notifications chan<- *Notification, cache *services.Cache) {
+func (s *NotificationService) relayMessages(ctx context.Context, userID pgtype.UUID, sessionId string, redisMessages <-chan *redis.Message, notifications chan<- *Notification, cache *services.Cache) {
 	for {
 		select {
 		case msg, ok := <-redisMessages:
@@ -321,7 +334,7 @@ func (s *NotificationService) relayMessages(ctx context.Context, userID pgtype.U
 			}
 			// Check if client still exists with lock
 			s.registry.mu.RLock()
-			_, exists := s.registry.clients[userID]
+			_, exists := s.registry.clients[sessionId]
 			s.registry.mu.RUnlock()
 
 			if !exists {
@@ -357,7 +370,7 @@ func (s *NotificationService) relayMessages(ctx context.Context, userID pgtype.U
 }
 
 // deliverStoredNotifications sends previously stored notifications to the client
-func (s *NotificationService) deliverStoredNotifications(ctx context.Context, userID pgtype.UUID, cache *services.Cache) error {
+func (s *NotificationService) deliverStoredNotifications(ctx context.Context, userID pgtype.UUID, sessionId string, cache *services.Cache) error {
 	key := fmt.Sprintf("notifications:buffer:%s", services.UUIDToString(userID))
 
 	for {
@@ -377,12 +390,12 @@ func (s *NotificationService) deliverStoredNotifications(ctx context.Context, us
 		}
 
 		s.registry.mu.RLock()
-		notifications, exists := s.registry.clients[userID]
+		notifications, exists := s.registry.clients[sessionId]
 		s.registry.mu.RUnlock()
 
 		if !exists {
 			s.PutNotification(notification)
-			return fmt.Errorf("client not found: %s", services.UUIDToString(userID))
+			return fmt.Errorf("client not found: %s", sessionId)
 		}
 
 		select {
@@ -443,12 +456,13 @@ func (s *NotificationService) Shutdown(ctx context.Context) error {
 
 // Helper methods
 
-func (s *NotificationService) hasActiveConnection(ctx context.Context, userID pgtype.UUID, cache *services.Cache) bool {
-	count, err := cache.Db.Exists(ctx, fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID))).Result()
+func (s *NotificationService) hasActiveConnection(ctx context.Context, userID pgtype.UUID, cache *services.Cache) (string, error) {
+	sessionId, err := cache.Db.Get(ctx, fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID))).Result()
+	// slog.Debug("hasActiveConnection", "userId", services.UUIDToString(userID), "sessionId", sessionId, "error", err)
 	if err != nil {
-		return false
+		return "", fmt.Errorf("no active notification session")
 	}
-	return count > 0
+	return sessionId, nil
 }
 
 func (s *NotificationService) storeNotification(ctx context.Context, n *Notification, cache *services.Cache) error {

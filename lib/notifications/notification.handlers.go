@@ -23,7 +23,12 @@ func (s *NotificationService) SSENotificationHandler(c *fiber.Ctx, cache *servic
 			"error": "unknown user",
 		})
 	}
-
+	sessionId, err := middleware.GetSessionId(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unknown session",
+		})
+	}
 	// Set SSE headers
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
@@ -34,7 +39,7 @@ func (s *NotificationService) SSENotificationHandler(c *fiber.Ctx, cache *servic
 	notifications := make(chan *Notification, 100)
 
 	// Register client
-	if err := s.registerClient(c.Context(), userID, notifications, cache); err != nil {
+	if err := s.registerClient(c.Context(), userID, sessionId, notifications, cache); err != nil {
 		slog.Error("failed to register client",
 			"error", err,
 			"user_id", services.UUIDToString(userID))
@@ -45,7 +50,7 @@ func (s *NotificationService) SSENotificationHandler(c *fiber.Ctx, cache *servic
 	defer s.bufPool.Put(bufPtr)
 
 	// Deliver any stored notifications
-	if err := s.deliverStoredNotifications(c.Context(), userID, cache); err != nil {
+	if err := s.deliverStoredNotifications(c.Context(), userID, sessionId, cache); err != nil {
 		slog.Error("Notifications : failed to deliver stored notifications",
 			"error", err,
 			"user_id", services.UUIDToString(userID))
@@ -54,22 +59,23 @@ func (s *NotificationService) SSENotificationHandler(c *fiber.Ctx, cache *servic
 	c.Context().SetBodyStreamWriter(func(w *bufio.Writer) {
 		// Ensure client is unregistered when connection closes
 		defer func() {
-			s.unregisterClient(context.Background(), userID, cache)
-			slog.Debug("Notifications : SSE notification session ended", "user_id", services.UUIDToString(userID))
+			s.unregisterClient(context.Background(), userID, sessionId, cache)
+			// slog.Debug("Notifications : SSE notification session ended", "user_id", services.UUIDToString(userID))
 			close(notifications)
 		}()
 
 		// Send initial connection established message
 		w.WriteString("data: {\"type\":\"connected\"}\n\n")
-		slog.Debug("data: {\"type\":\"connected\"}")
+		// slog.Debug("data: {\"type\":\"connected\"}")
 		w.Flush()
 
 		s.registry.mu.RLock()
-		closeChan := s.registry.closeChans[userID]
+		closeChan := s.registry.closeChans[sessionId]
 		s.registry.mu.RUnlock()
 
 		connectionCheckTicker := time.NewTicker(5 * time.Minute)
 		defer connectionCheckTicker.Stop()
+
 		// Start message loop
 		for {
 			select {
@@ -104,7 +110,7 @@ func (s *NotificationService) SSENotificationHandler(c *fiber.Ctx, cache *servic
 				return
 			case <-connectionCheckTicker.C:
 				// Check if connection is still valid
-				if s.hasActiveConnection(context.Background(), userID, cache) {
+				if currentSessionId, err := s.hasActiveConnection(context.Background(), userID, cache); (err == nil && sessionId != currentSessionId) || (err != nil) {
 					slog.Debug("Notifications : Connection status invalid or expired", "user_id", services.UUIDToString(userID))
 					return
 				}
@@ -121,9 +127,22 @@ func (s *NotificationService) RefreshConnectionTTL(ctx context.Context, userID p
 }
 
 // CloseConnection forcefully closes a user's connection
-func (s *NotificationService) CloseConnection(ctx context.Context, userID pgtype.UUID, cache *services.Cache) error {
+func (s *NotificationService) CloseConnection(c *fiber.Ctx, cache *services.Cache) error {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unknown user",
+		})
+	}
+	sessionId, err := middleware.GetSessionId(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unknown session",
+		})
+	}
+
 	s.registry.mu.RLock()
-	closeChan, exists := s.registry.closeChans[userID]
+	closeChan, exists := s.registry.closeChans[sessionId]
 	s.registry.mu.RUnlock()
 
 	if exists {
@@ -131,5 +150,5 @@ func (s *NotificationService) CloseConnection(ctx context.Context, userID pgtype
 		close(closeChan)
 	}
 	key := fmt.Sprintf("notifications:is_connected:%s", services.UUIDToString(userID))
-	return cache.Db.Del(ctx, key).Err()
+	return cache.Db.Del(c.Context(), key).Err()
 }

@@ -20,6 +20,10 @@ type OAuthConfig struct {
 	MockServerConfig MockServerConfig
 }
 
+func GetStaticCORS_OAuthUrls() string {
+	return "http://localhost:3000, http://172.17.0.1:3000, http://172.17.0.1:3202, http://localhost:3202"
+}
+
 func BuildAuthConfig(vault *vault.VaultManager) (*AuthConfig, error) {
 	jwt_key, err := vault.GetApiKey("JWT_KEY")
 	if err != nil {

@@ -38,10 +38,22 @@ func extractBearerToken(c *fiber.Ctx) (string, error) {
 func Protected(auth **authentication.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Extract and validate CSRF token first
+		csrf_token_cookie := c.Cookies("CSRF-TOKEN")
+		if len(csrf_token_cookie) == 0 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "No CSRF-TOKEN in Cookies",
+			})
+		}
 		csrf_token := c.Get("X-CSRF-Token")
 		if csrf_token == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": ErrInvalidCSRF.Error(),
+				"error": "No CSRF-TOKEN in Headers",
+			})
+		}
+
+		if csrf_token_cookie != csrf_token {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Different CSRF tokens",
 			})
 		}
 		// Extract token
@@ -71,14 +83,8 @@ func Protected(auth **authentication.AuthService) fiber.Handler {
 // RequireSession ensures a valid session exists
 func RequireSession(auth **authentication.AuthService, sessions *session.Store) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		sessionID := c.Get("X-Session-ID")
-		if sessionID == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "No session found",
-			})
-		}
 
-		valid, err := (*auth).ValidateSession(c, sessionID, sessions)
+		valid, sessionID, err := (*auth).ValidateSession(c, sessions)
 		if err != nil || !valid {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid or expired session",
@@ -99,7 +105,7 @@ func GetUserID(c *fiber.Ctx) (pgtype.UUID, error) {
 	return userID, nil
 }
 
-// GetUserID helper to get userID from context
+// GetSessionId helper to get sessionID from context
 func GetSessionId(c *fiber.Ctx) (string, error) {
 	sessionID, ok := c.Locals("sessionID").(string)
 	if !ok {

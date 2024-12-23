@@ -81,8 +81,10 @@ func (server *MaintenanceServer) Configure() {
 	server.App.Use(helmet.New())
 	server.App.Use(recover.New())
 	server.App.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowHeaders: "Origin, Content-Type, Accept",
+		AllowOrigins:     "http://localhost:5050,http://localhost:3202", // fmt.Sprintf("%s, %s, %s", os.Getenv("NEXUSPOOL_ADDRESS"), os.Getenv("APP_ADDRESS"), authentication.GetStaticCORS_OAuthUrls()),
+		AllowHeaders:     "Origin,Content-Type,Accept,Content-Length,Accept-Language,Accept-Encoding,Connection,Access-Control-Allow-Origin,X-CSRF-Token,Authorization,X-Session-ID,Cache-Control",
+		AllowCredentials: true,
+		AllowMethods:     "GET,POST",
 	}))
 
 	// Initialize session store

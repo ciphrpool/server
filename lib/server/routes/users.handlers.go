@@ -54,24 +54,24 @@ func GetUserByTagHandler(params GetUserByTagParams, ctx *fiber.Ctx, db *services
 	queries := basepool.New(db.Pool)
 
 	if params.Detailed {
-		users, err := queries.GetUserByTagDetailed(query_ctx, params.Tag)
+		user, err := queries.GetUserByTagDetailed(query_ctx, params.Tag)
 		if err != nil {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "user not found",
 			})
 		}
 		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
-			"users": users,
+			"user": user,
 		})
 	} else {
-		users, err := queries.GetUserByTagSummary(query_ctx, params.Tag)
+		user, err := queries.GetUserByTagSummary(query_ctx, params.Tag)
 		if err != nil {
 			return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "user not found",
 			})
 		}
 		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
-			"users": users,
+			"user": user,
 		})
 	}
 }

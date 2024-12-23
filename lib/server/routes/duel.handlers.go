@@ -49,11 +49,11 @@ func FriendliesChallengeHandler(data FriendliesChallengeData, ctx *fiber.Ctx, ca
 		notify.Send(
 			ctx.Context(),
 			notifications.TypeAlert,
+			"duel:challenge_notification",
 			notifications.PriorityHigh,
 			opponent.ID,
 			fiber.Map{
-				"type": "duel",
-				"msg":  fmt.Sprintf("%s#%s has challenged you to a friendly duel !", opponent.Username, opponent.Tag),
+				"msg": fmt.Sprintf("%s#%s has challenged you to a friendly duel !", opponent.Username, opponent.Tag),
 			},
 			fiber.Map{
 				"opponent_tag": opponent.Tag,
@@ -108,13 +108,6 @@ func FriendliesChallengeResponeHandler(data FriendliesChallengeResponseData, ctx
 		})
 	}
 
-	nexuspool, err := cache.GetAliveNexusPool()
-	if err != nil {
-		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "cannot start the game",
-		})
-	}
-
 	session_id, err := cache.CreateDuelSession(&services.DuelSessionData{
 		DuelType: basepool.DuelTypeFriendly,
 		P1: services.DuelPlayerSummaryData{
@@ -136,12 +129,8 @@ func FriendliesChallengeResponeHandler(data FriendliesChallengeResponseData, ctx
 		})
 	}
 
-	aes_key, ok := vault.OpenNexusAESKey[nexuspool.Id]
-	if !ok {
-		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "cannot start the game",
-		})
-	}
+	aes_key := vault.OpenNexusAESKey
+
 	p1_session_json, err := json.Marshal(fiber.Map{
 		"session_id": session_id,
 		"pid":        p1_duel_summary_data.ID,
@@ -179,11 +168,11 @@ func FriendliesChallengeResponeHandler(data FriendliesChallengeResponseData, ctx
 	notify.Send(
 		ctx.Context(),
 		notifications.TypeRedirect,
+		"duel:acceptance",
 		notifications.PriorityHigh,
 		p1_duel_summary_data.ID,
 		fiber.Map{
-			"type": "duel",
-			"msg":  "The friendly duel has been accepted, you will be redirected to the duel...",
+			"msg": "The friendly duel has been accepted, you will be redirected to the duel...",
 		},
 		fiber.Map{
 			"url": "",
@@ -192,11 +181,11 @@ func FriendliesChallengeResponeHandler(data FriendliesChallengeResponseData, ctx
 	notify.Send(
 		ctx.Context(),
 		notifications.TypeRedirect,
+		"duel:acceptance",
 		notifications.PriorityHigh,
 		user_id,
 		fiber.Map{
-			"type": "duel",
-			"msg":  "The friendly duel has been accepted, you will be redirected to the duel...",
+			"msg": "The friendly duel has been accepted, you will be redirected to the duel...",
 		},
 		fiber.Map{
 			"url": "",

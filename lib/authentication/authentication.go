@@ -54,7 +54,7 @@ type AuthServiceInterface interface {
 
 	// Session Management
 	CreateSession(ctx *fiber.Ctx, userID uuid.UUID, sessions *session.Store) (string, error)
-	ValidateSession(ctx *fiber.Ctx, sessionID string, sessions *session.Store) (bool, error)
+	ValidateSession(ctx *fiber.Ctx, sessions *session.Store) (bool, string, error)
 	DestroySession(ctx *fiber.Ctx, sessionID string, sessions *session.Store) error
 }
 

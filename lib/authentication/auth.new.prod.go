@@ -25,6 +25,10 @@ type OAuthConfig struct {
 	GithubConfig GithubConfig
 }
 
+func GetStaticCORS_OAuthUrls() string {
+	return "http://172.17.0.1:3202" //TODO
+}
+
 func BuildAuthConfig(vault *vault.VaultManager) (*AuthConfig, error) {
 	jwt_key, err := vault.GetApiKey("JWT_KEY")
 	if err != nil {

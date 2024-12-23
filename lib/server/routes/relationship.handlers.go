@@ -6,7 +6,6 @@ import (
 	"backend/lib/services"
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	basepool "github.com/ciphrpool/base-pool/gen"
@@ -17,7 +16,7 @@ type FriendRequestData struct {
 	FriendTag string `json:"friend_tag"`
 }
 
-func FriendRequestHandler(data FriendRequestData, ctx *fiber.Ctx, db *services.Database) error {
+func FriendRequestHandler(data FriendRequestData, ctx *fiber.Ctx, db *services.Database, notify *notifications.NotificationService) error {
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
@@ -34,19 +33,33 @@ func FriendRequestHandler(data FriendRequestData, ctx *fiber.Ctx, db *services.D
 			"error": "unknown user",
 		})
 	}
-
+	user, err := queries.GetUserByID(query_ctx, user_id)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "user not found",
+		})
+	}
 	err = queries.CreateFriendRequest(query_ctx, basepool.CreateFriendRequestParams{
 		User1ID: user_id,
 		User2ID: friend.ID,
 	})
-
 	if err != nil {
-		slog.Debug("CreateUserRelationship failed", "error", err)
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "cannot create this relationship",
 		})
 	}
 
+	notify.Send(
+		ctx.Context(),
+		notifications.TypeMessage,
+		"relationship:request",
+		notifications.PriorityMedium,
+		friend.ID,
+		fiber.Map{
+			"msg": fmt.Sprintf("%s#%s has send you a friend request !", user.Username, user.Tag),
+		},
+		fiber.Map{},
+	)
 	return ctx.SendStatus(fiber.StatusAccepted)
 }
 
@@ -149,14 +162,21 @@ func FriendResponceHandler(data FriendResponseData, ctx *fiber.Ctx, db *services
 			User1ID: requester.ID,
 			User2ID: user_id,
 		})
+		user, err := queries.GetUserByID(query_ctx, user_id)
+		if err != nil {
+			return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "user not found",
+			})
+		}
+
 		notify.Send(
 			ctx.Context(),
 			notifications.TypeMessage,
+			"relationship:acceptance",
 			notifications.PriorityMedium,
 			requester.ID,
 			fiber.Map{
-				"type": "relationship",
-				"msg":  fmt.Sprintf("%s#%s has accepted your friend request !", requester.Username, requester.Tag),
+				"msg": fmt.Sprintf("%s#%s has accepted your friend request !", user.Username, user.Tag),
 			},
 			fiber.Map{},
 		)
@@ -197,5 +217,41 @@ func GetAllFriendsHandler(ctx *fiber.Ctx, db *services.Database) error {
 
 	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
 		"friends": friends,
+	})
+}
+
+type GetRelationshipParams struct {
+	UserTag string `query:"user_tag"`
+}
+
+func GetRelationshipHandler(params GetRelationshipParams, c *fiber.Ctx, db *services.Database) error {
+	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	queries := basepool.New(db.Pool)
+
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "unknown user",
+		})
+	}
+
+	other, err := queries.GetUserIDByTag(query_ctx, params.UserTag)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "cannot find this user",
+		})
+	}
+	relationship, err := queries.GetRelationship(query_ctx, basepool.GetRelationshipParams{
+		User1ID: userID,
+		User2ID: other.ID,
+	})
+	if err != nil {
+		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+			"relationship": nil,
+		})
+	}
+	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		"relationship": relationship,
 	})
 }

@@ -77,61 +77,60 @@ func (a *AuthService) CreateSession(
 // ValidateSession validates a session and updates last seen time
 func (a *AuthService) ValidateSession(
 	ctx *fiber.Ctx,
-	sessionID string,
 	sessions *session.Store,
-) (bool, error) {
+) (bool, string, error) {
 	// Get session from store
 	sess, err := sessions.Get(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to get session: %w", err)
+		return false, "", fmt.Errorf("failed to get session: %w", err)
 	}
-
-	if sess.ID() != sessionID {
-		return false, nil
-	}
-
+	sessionId := sess.ID()
 	// Get session data
 	sessionDataStr := sess.Get("data")
 	if sessionDataStr == nil {
-		return false, nil
+		return false, "", nil
 	}
 
 	var sessionData SessionData
 	err = json.Unmarshal([]byte(sessionDataStr.(string)), &sessionData)
 	if err != nil {
-		return false, fmt.Errorf("failed to unmarshal session data: %w", err)
+		return false, "", fmt.Errorf("failed to unmarshal session data: %w", err)
 	}
 
 	// Check if session is expired
 	if time.Now().After(sessionData.ExpiresAt) {
 		// Clean up expired session
-		if err := a.DestroySession(ctx, sessionID, sessions); err != nil {
-			return false, fmt.Errorf("failed to clean up expired session: %w", err)
+		if err := a.DestroySession(ctx, sess.ID(), sessions); err != nil {
+			return false, "", fmt.Errorf("failed to clean up expired session: %w", err)
 		}
-		return false, ErrSessionExpired
+		return false, "", ErrSessionExpired
 	}
 
 	// Validate User-Agent hasn't changed dramatically
 	if sessionData.UserAgent != "" && sessionData.UserAgent != ctx.Get("User-Agent") {
-		return false, ErrSessionInvalid
+		return false, "", ErrSessionInvalid
 	}
 
+	// Validate IP hasn't changed dramatically
+	if sessionData.IPAddress != "" && sessionData.IPAddress != ctx.IP() {
+		return false, "", ErrSessionInvalid
+	}
 	// Update last seen time
 	sessionData.LastSeen = time.Now()
 
 	// Save updated session data
 	updatedDataJSON, err := json.Marshal(sessionData)
 	if err != nil {
-		return false, fmt.Errorf("failed to marshal updated session data: %w", err)
+		return false, "", fmt.Errorf("failed to marshal updated session data: %w", err)
 	}
 
 	sess.Set("data", string(updatedDataJSON))
 
 	if err := sess.Save(); err != nil {
-		return false, fmt.Errorf("failed to save updated session: %w", err)
+		return false, "", fmt.Errorf("failed to save updated session: %w", err)
 	}
 
-	return true, nil
+	return true, sessionId, nil
 }
 
 // DestroySession removes a session

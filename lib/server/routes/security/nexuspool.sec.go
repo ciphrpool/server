@@ -51,14 +51,27 @@ func RequestNexusPoolConnexionHandler(ctx *fiber.Ctx, cache *services.Cache, man
 		})
 	}
 
-	key, err := genAESKey()
+	aes_key, err := genAESKey()
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	if err := manager.StoreNexusPoolAESKey(id, key); err != nil {
+	if err := manager.StoreNexusPoolAESKey(id, aes_key); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	hmac_key, err := genHMACKey()
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if err := manager.StoreNexusPoolHMACKey(id, hmac_key); err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
 		})

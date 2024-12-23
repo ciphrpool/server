@@ -16,8 +16,9 @@ type VaultManager struct {
 	Api       *Vault
 	Services  *Vault
 
-	OpenNexusAESKey map[string]string
-	OpenAPIKey      map[string]string
+	OpenNexusAESKey  string
+	OpenNexusHMACKey string
+	OpenAPIKey       map[string]string
 }
 
 func NewVaultManager() (VaultManager, error) {
@@ -40,14 +41,13 @@ func NewVaultManager() (VaultManager, error) {
 		return VaultManager{}, fmt.Errorf("failed to create Vault client: %w", err)
 	}
 
-	var open_nexus_aes_key = make(map[string]string, 2)
 	var open_api_key = make(map[string]string, 8)
 
 	vault_manager := VaultManager{
 		NexusPool:       nexuspool,
 		Api:             api,
 		Services:        services,
-		OpenNexusAESKey: open_nexus_aes_key,
+		OpenNexusAESKey: "",
 		OpenAPIKey:      open_api_key,
 	}
 	return vault_manager, nil
@@ -80,21 +80,34 @@ func (manager *VaultManager) StoreNexusPoolAESKey(id string, key string) error {
 	kvv2 := manager.NexusPool.KVv2("nexuspool")
 
 	// Write the secret
-	_, err := kvv2.Put(context.Background(), fmt.Sprintf("aes/%s", id), secret)
+	_, err := kvv2.Put(context.Background(), "aes", secret)
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
 	}
-	manager.OpenNexusAESKey[id] = key
+	manager.OpenNexusAESKey = key
 
+	return err
+}
+
+func (manager *VaultManager) StoreNexusPoolHMACKey(id string, key string) error {
+	secret := map[string]interface{}{
+		"key": key,
+	}
+	kvv2 := manager.NexusPool.KVv2("nexuspool")
+
+	// Write the secret
+	_, err := kvv2.Put(context.Background(), "hmac", secret)
 	if err != nil {
 		return fmt.Errorf("failed to store key in Vault: %w", err)
 	}
+	manager.OpenNexusHMACKey = key
+
 	return err
 }
 
 func (manager *VaultManager) GetNexusPoolAESKey(id string) (string, error) {
 	kvv2 := manager.NexusPool.KVv2("nexuspool")
-	path := fmt.Sprintf("aes/%s", id)
+	path := "aes"
 
 	secret, err := kvv2.Get(context.Background(), path)
 	if err != nil {

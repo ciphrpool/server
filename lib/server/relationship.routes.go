@@ -26,7 +26,7 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 				})
 			}
 
-			return routes.FriendRequestHandler(data, c, &server.Db)
+			return routes.FriendRequestHandler(data, c, &server.Db, server.Notifications)
 		},
 	)
 
@@ -73,6 +73,17 @@ func (server *MaintenanceServer) RegisterRelationshipRoutes() {
 	relationship_group.Get("/all_friends",
 		func(c *fiber.Ctx) error {
 			return routes.GetAllFriendsHandler(c, &server.Db)
+		},
+	)
+	relationship_group.Get("/between",
+		func(c *fiber.Ctx) error {
+			var params routes.GetRelationshipParams
+			if err := c.QueryParser(&params); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid query parameters",
+				})
+			}
+			return routes.GetRelationshipHandler(params, c, &server.Db)
 		},
 	)
 }

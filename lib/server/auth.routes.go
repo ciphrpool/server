@@ -34,6 +34,13 @@ func (server *MaintenanceServer) RegisterAuthRoutes() {
 		return routes.OAuthCallbackHandler(provider, params, c, server.AuthService, &server.Cache, &server.Db, &server.VaultManager, server.Sessions)
 	})
 
+	auth_group.Get("/check",
+		middleware.Protected(&server.AuthService),
+		middleware.RequireSession(&server.AuthService, server.Sessions),
+		func(c *fiber.Ctx) error {
+			return c.SendStatus(fiber.StatusOK)
+		},
+	)
 	// Token management
 	auth_group.Get("/refresh/session",
 		func(c *fiber.Ctx) error {

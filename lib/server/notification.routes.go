@@ -33,14 +33,8 @@ func (server *MaintenanceServer) RegisterNotificationRoutes() {
 
 	notification_group.Post("/close",
 		func(c *fiber.Ctx) error {
-			userID, err := middleware.GetUserID(c)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "unknown user",
-				})
-			}
 
-			err = server.Notifications.CloseConnection(c.Context(), userID, &server.Cache)
+			err := server.Notifications.CloseConnection(c, &server.Cache)
 			if err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error": "failed to close connection",
@@ -69,6 +63,7 @@ func (server *MaintenanceServer) RegisterNotificationRoutes() {
 			server.Notifications.Send(
 				c.Context(),
 				notifications.TypePing,
+				"ping",
 				notifications.PriorityLow,
 				userID,
 				fiber.Map{
