@@ -76,3 +76,28 @@ func EncryptAES(src string, key_b64 string) (string, error) {
 	ciphertext_b64 := base64.StdEncoding.EncodeToString(combined)
 	return ciphertext_b64, nil
 }
+
+func EncryptAESUrlSafe(src string, key_b64 string) (string, error) {
+	key, err := base64.StdEncoding.DecodeString(key_b64)
+	if err != nil {
+		return "", err
+	}
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return "", err
+	}
+
+	aes_gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GCM: %w", err)
+	}
+
+	nonce := make([]byte, 12)
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	}
+	ciphertext := aes_gcm.Seal(nil, nonce, []byte(src), nil)
+	combined := append(nonce, ciphertext...)
+	ciphertext_b64 := base64.URLEncoding.EncodeToString(combined)
+	return ciphertext_b64, nil
+}
