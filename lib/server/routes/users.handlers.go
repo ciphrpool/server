@@ -27,7 +27,7 @@ func SearchByUsernameHandler(params SearchByUsernameParams, ctx *fiber.Ctx, db *
 				"error": "cannot search users matching the given username",
 			})
 		}
-		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 			"users": users,
 		})
 	} else {
@@ -37,7 +37,7 @@ func SearchByUsernameHandler(params SearchByUsernameParams, ctx *fiber.Ctx, db *
 				"error": "cannot search users matching the given username",
 			})
 		}
-		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 			"users": users,
 		})
 	}
@@ -60,7 +60,7 @@ func GetUserByTagHandler(params GetUserByTagParams, ctx *fiber.Ctx, db *services
 				"error": "user not found",
 			})
 		}
-		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 			"user": user,
 		})
 	} else {
@@ -70,7 +70,7 @@ func GetUserByTagHandler(params GetUserByTagParams, ctx *fiber.Ctx, db *services
 				"error": "user not found",
 			})
 		}
-		return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 			"user": user,
 		})
 	}
@@ -96,7 +96,7 @@ func GetSelfHandler(params GetSelfParams, ctx *fiber.Ctx, db *services.Database)
 			"error": "user not found",
 		})
 	}
-	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"user": user,
 	})
 }

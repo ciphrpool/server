@@ -72,7 +72,7 @@ func (server *MaintenanceServer) RegisterNotificationRoutes() {
 				fiber.Map{},
 			)
 
-			return c.SendStatus(fiber.StatusAccepted)
+			return c.SendStatus(fiber.StatusOK)
 		},
 	)
 }

@@ -55,18 +55,18 @@ func (a *AuthService) SignUp(
 	qtx := queries.WithTx(tx)
 
 	// Create new user
-	user_id, err := qtx.CreateUser(ctx, *user_profile)
+	user_id, err := qtx.CreateUser(query_ctx, *user_profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	err = qtx.CreateUserDefaultSettings(ctx, user_id)
+	err = qtx.CreateUserDefaultSettings(query_ctx, user_id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user default settings: %w", err)
 	}
 
 	// Store OAuth account info
-	err = qtx.CreateAuthAccount(ctx, basepool.CreateAuthAccountParams{
+	err = qtx.CreateAuthAccount(query_ctx, basepool.CreateAuthAccountParams{
 		UserID:   user_id,
 		Email:    oauth_profile.Email,
 		AuthType: oauth_profile.Provider,
@@ -78,7 +78,7 @@ func (a *AuthService) SignUp(
 	}
 
 	// Commit transaction
-	if err := tx.Commit(ctx); err != nil {
+	if err := tx.Commit(query_ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 

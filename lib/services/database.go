@@ -71,6 +71,21 @@ func StringToUUID(s string) (pgtype.UUID, error) {
 	return pgUUID, nil
 }
 
+func StringToTimestampz(s string) (pgtype.Timestamptz, error) {
+	// Parse the string to time.Time
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return pgtype.Timestamptz{}, err
+	}
+
+	// Convert to pgtype.Timestamptz
+	var ts pgtype.Timestamptz
+	ts.Time = t
+	ts.Valid = true
+
+	return ts, nil
+}
+
 func UUIDToString(id pgtype.UUID) string {
 	if !id.Valid {
 		return ""

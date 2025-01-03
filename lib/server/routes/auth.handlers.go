@@ -161,7 +161,7 @@ func RefreshSessionHandler(c *fiber.Ctx, auth *authentication.AuthService, cache
 		})
 	}
 
-	return c.SendStatus(fiber.StatusAccepted)
+	return c.SendStatus(fiber.StatusOK)
 }
 
 func RefreshAllTokenHandler(c *fiber.Ctx, auth *authentication.AuthService, cache *services.Cache) error {
@@ -228,5 +228,5 @@ func LogoutHandler(c *fiber.Ctx, auth *authentication.AuthService, cache *servic
 			"error": "Invalid user",
 		})
 	}
-	return c.SendStatus(fiber.StatusAccepted)
+	return c.SendStatus(fiber.StatusOK)
 }

@@ -31,7 +31,7 @@ func GetAllModulesHandler(ctx *fiber.Ctx, db *services.Database) error {
 		})
 	}
 
-	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"modules": modules,
 	})
 }
@@ -62,7 +62,7 @@ func FetchModuleHandler(params FetchModuleParams, ctx *fiber.Ctx, db *services.D
 		})
 	}
 
-	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"module": module,
 	})
 }
@@ -95,7 +95,7 @@ func RenameModuleHandler(data RenameModuleData, ctx *fiber.Ctx, db *services.Dat
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type PushModuleData struct {
@@ -136,7 +136,7 @@ func PushModuleHandler(data PushModuleData, ctx *fiber.Ctx, db *services.Databas
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type DeleteModuleData struct {
@@ -165,7 +165,7 @@ func DeleteModuleHandler(data DeleteModuleData, ctx *fiber.Ctx, db *services.Dat
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type CreateModuleData struct {
@@ -194,7 +194,7 @@ func CreateModuleHandler(data CreateModuleData, ctx *fiber.Ctx, db *services.Dat
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type ActivateModuleData struct {
@@ -223,7 +223,7 @@ func ActivateModuleHandler(data ActivateModuleData, ctx *fiber.Ctx, db *services
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 func PrepareCompilationHandler(ctx *fiber.Ctx, vault *vault.VaultManager) error {
@@ -243,7 +243,7 @@ func PrepareCompilationHandler(ctx *fiber.Ctx, vault *vault.VaultManager) error 
 		})
 	}
 
-	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"encrypted_user_id": encrypted_user_id,
 	})
 }

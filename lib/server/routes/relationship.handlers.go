@@ -58,9 +58,11 @@ func FriendRequestHandler(data FriendRequestData, ctx *fiber.Ctx, db *services.D
 		fiber.Map{
 			"msg": fmt.Sprintf("%s#%s has send you a friend request !", user.Username, user.Tag),
 		},
-		fiber.Map{},
+		fiber.Map{
+			"tag": user.Tag,
+		},
 	)
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type RemoveFriendData struct {
@@ -95,7 +97,7 @@ func RemoveFriendHandler(data RemoveFriendData, ctx *fiber.Ctx, db *services.Dat
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type RemovePendingFriendRequestData struct {
@@ -131,7 +133,7 @@ func RemovePendingFriendRequestHandler(data RemovePendingFriendRequestData, ctx 
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 type FriendResponseData struct {
@@ -193,7 +195,7 @@ func FriendResponceHandler(data FriendResponseData, ctx *fiber.Ctx, db *services
 		})
 	}
 
-	return ctx.SendStatus(fiber.StatusAccepted)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 func GetAllFriendsHandler(ctx *fiber.Ctx, db *services.Database) error {
@@ -215,7 +217,7 @@ func GetAllFriendsHandler(ctx *fiber.Ctx, db *services.Database) error {
 		})
 	}
 
-	return ctx.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return ctx.Status(fiber.StatusOK).JSON(fiber.Map{
 		"friends": friends,
 	})
 }
@@ -247,11 +249,11 @@ func GetRelationshipHandler(params GetRelationshipParams, c *fiber.Ctx, db *serv
 		User2ID: other.ID,
 	})
 	if err != nil {
-		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"relationship": nil,
 		})
 	}
-	return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"relationship": relationship,
 	})
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"backend/lib/authentication"
+	"backend/lib/duels"
 	"backend/lib/maintenance"
 	"backend/lib/notifications"
 	"backend/lib/server/middleware"
@@ -28,6 +29,7 @@ type MaintenanceServer struct {
 	SecurityManager maintenance.SecurityManager
 	StateMachine    maintenance.StateMachine
 	AuthService     *authentication.AuthService
+	DuelSupervisor  *duels.DuelSupervisor
 }
 
 func New() (*MaintenanceServer, error) {
@@ -54,6 +56,10 @@ func New() (*MaintenanceServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	duel_supervisor, err := duels.NewDuelSupervisor(10)
+	if err != nil {
+		return nil, err
+	}
 
 	server := MaintenanceServer{
 		App:             fiber.New(),
@@ -63,6 +69,7 @@ func New() (*MaintenanceServer, error) {
 		VaultManager:    vault_manager,
 		SecurityManager: security_manager,
 		StateMachine:    maintenance.NewStateMachine(),
+		DuelSupervisor:  duel_supervisor,
 	}
 
 	return &server, nil
@@ -81,8 +88,10 @@ func (server *MaintenanceServer) Configure() {
 	server.App.Use(helmet.New())
 	server.App.Use(recover.New())
 	server.App.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:5050,http://localhost:3202", // fmt.Sprintf("%s, %s, %s", os.Getenv("NEXUSPOOL_ADDRESS"), os.Getenv("APP_ADDRESS"), authentication.GetStaticCORS_OAuthUrls()),
-		AllowHeaders:     "Origin,Content-Type,Accept,Content-Length,Accept-Language,Accept-Encoding,Connection,Access-Control-Allow-Origin,X-CSRF-Token,Authorization,X-Session-ID,Cache-Control",
+		AllowOrigins: "http://localhost:5050,http://localhost:3202", // fmt.Sprintf("%s, %s, %s", os.Getenv("NEXUSPOOL_ADDRESS"), os.Getenv("APP_ADDRESS"), authentication.GetStaticCORS_OAuthUrls()),
+		AllowHeaders: "Origin,Content-Type,Accept,Content-Length,Accept-Language,Accept-Encoding," +
+			"Connection,Access-Control-Allow-Origin,X-CSRF-Token,Authorization,X-Session-ID,Cache-Control," +
+			"expires,pragma",
 		AllowCredentials: true,
 		AllowMethods:     "GET,POST",
 	}))
@@ -155,6 +164,12 @@ func (server *MaintenanceServer) Start() {
 			if err := server.Notifications.Start(context.Background(), &server.Cache); err != nil {
 				// raise fault
 				slog.Error("Notifications could not start", "error", err)
+				return
+			}
+
+			if err := server.DuelSupervisor.Start(context.Background(), &server.Cache, &server.Db); err != nil {
+				// raise fault
+				slog.Error("DuelSupervisor could not start", "error", err)
 				return
 			}
 

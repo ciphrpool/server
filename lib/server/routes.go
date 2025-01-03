@@ -14,6 +14,8 @@ func (server *MaintenanceServer) RegisterRoutes() {
 
 	server.RegisterArenaRoutes()
 
+	server.RegisterDuelRoutes()
+
 	server.RegisterRelationshipRoutes()
 
 	server.RegisterModulesRoutes()
