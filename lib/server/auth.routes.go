@@ -61,6 +61,7 @@ func (server *MaintenanceServer) RegisterAuthRoutes() {
 	)
 
 	auth_group.Post("/logout",
+		middleware.RequireSession(&server.AuthService, server.Sessions),
 		middleware.Protected(&server.AuthService),
 		func(c *fiber.Ctx) error {
 			return routes.LogoutHandler(c, server.AuthService, &server.Cache, server.Sessions)

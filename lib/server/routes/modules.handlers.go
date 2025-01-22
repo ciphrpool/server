@@ -104,7 +104,7 @@ type PushModuleData struct {
 	Hmac string `json:"hmac"`
 }
 
-func PushModuleHandler(data PushModuleData, ctx *fiber.Ctx, db *services.Database, vault *vault.VaultManager) error {
+func PushModuleHandler(data PushModuleData, ctx *fiber.Ctx, cache *services.Cache, db *services.Database, vault *vault.VaultManager) error {
 	query_ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	queries := basepool.New(db.Pool)
@@ -133,6 +133,13 @@ func PushModuleHandler(data PushModuleData, ctx *fiber.Ctx, db *services.Databas
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "invalid module name",
+		})
+	}
+
+	err = cache.RefreshActiveModule(user_id, db, true)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": err.Error(),
 		})
 	}
 
@@ -213,7 +220,7 @@ func ActivateModuleHandler(data ActivateModuleData, ctx *fiber.Ctx, db *services
 		})
 	}
 
-	_, err = queries.CreateModule(query_ctx, basepool.CreateModuleParams{
+	err = queries.ActivateModule(query_ctx, basepool.ActivateModuleParams{
 		UserID: user_id,
 		Name:   data.Name,
 	})

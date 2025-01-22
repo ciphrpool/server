@@ -79,7 +79,7 @@ func PrepareArenaHandler(ctx *fiber.Ctx, cache *services.Cache, db *services.Dat
 	}
 	response.EncryptedSessionContext = encrypted_session_context
 
-	err = cache.RefreshActiveModule(user_id, db)
+	err = cache.RefreshActiveModule(user_id, db, false)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),

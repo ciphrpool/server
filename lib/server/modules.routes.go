@@ -24,19 +24,6 @@ func (server *MaintenanceServer) RegisterModulesRoutes() {
 	modules_group.Post("/create",
 		middleware.RequireSession(&server.AuthService, server.Sessions),
 		func(c *fiber.Ctx) error {
-			var data routes.ActivateModuleData
-
-			if err := c.BodyParser(&data); err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "invalid request body",
-				})
-			}
-			return routes.ActivateModuleHandler(data, c, &server.Db)
-		},
-	)
-	modules_group.Post("/activate",
-		middleware.RequireSession(&server.AuthService, server.Sessions),
-		func(c *fiber.Ctx) error {
 			var data routes.CreateModuleData
 
 			if err := c.BodyParser(&data); err != nil {
@@ -45,6 +32,19 @@ func (server *MaintenanceServer) RegisterModulesRoutes() {
 				})
 			}
 			return routes.CreateModuleHandler(data, c, &server.Db)
+		},
+	)
+	modules_group.Post("/activate",
+		middleware.RequireSession(&server.AuthService, server.Sessions),
+		func(c *fiber.Ctx) error {
+			var data routes.ActivateModuleData
+
+			if err := c.BodyParser(&data); err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid request body",
+				})
+			}
+			return routes.ActivateModuleHandler(data, c, &server.Db)
 		},
 	)
 	modules_group.Get("/fetch",
@@ -82,7 +82,7 @@ func (server *MaintenanceServer) RegisterModulesRoutes() {
 					"error": "invalid request body",
 				})
 			}
-			return routes.PushModuleHandler(data, c, &server.Db, &server.VaultManager)
+			return routes.PushModuleHandler(data, c, &server.Cache, &server.Db, &server.VaultManager)
 		},
 	)
 

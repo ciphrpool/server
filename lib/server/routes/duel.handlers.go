@@ -298,7 +298,7 @@ func FriendliesPrepareHandler(params FriendliesPrepareResponseParams, ctx *fiber
 		})
 	}
 
-	err = cache.RefreshActiveModule(user_id, db)
+	err = cache.RefreshActiveModule(user_id, db, false)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": err.Error(),
